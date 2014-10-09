@@ -13,6 +13,7 @@ with warnings.catch_warnings():
     import tifffile
 
 # local libraries
+from nion.swift.model import Image
 from nion.swift.model import ImportExportManager
 
 
@@ -26,6 +27,10 @@ class TIFFImportExportHandler(ImportExportManager.ImportExportHandler):
 
     def read_data_elements(self, ui, extension, file_path):
         data = tifffile.imread(file_path)
+        if Image.is_data_rgb(data):
+            data = data[:,:,(2, 1, 0)]
+        if Image.is_data_rgba(data):
+            data = data[:,:,(2, 1, 0, 3)]
         data_element = dict()
         data_element["data"] = data
         return [data_element]
@@ -36,6 +41,10 @@ class TIFFImportExportHandler(ImportExportManager.ImportExportHandler):
     def write(self, ui, data_item, file_path, extension):
         data = data_item.data
         if data is not None:
+            if Image.is_data_rgb(data):
+                data = data[:,:,(2, 1, 0)]
+            if Image.is_data_rgba(data):
+                data = data[:,:,(2, 1, 0, 3)]
             tifffile.imsave(file_path, data)
 
 
