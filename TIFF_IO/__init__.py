@@ -25,7 +25,7 @@ class TIFFImportExportHandler(ImportExportManager.ImportExportHandler):
         super(TIFFImportExportHandler, self).__init__(_("TIFF Files"), ["tif", "tiff"])
 
     def read_data_elements(self, ui, extension, file_path):
-        data = tiffile.imread(file_path)
+        data = tifffile.imread(file_path)
         data_element = dict()
         data_element["data"] = data
         return [data_element]
@@ -33,7 +33,10 @@ class TIFFImportExportHandler(ImportExportManager.ImportExportHandler):
     def can_write(self, data_item, extension):
         return len(data_item.spatial_shape) == 2
 
-    def write_data(self, data, extension, file_path):
-        tiffile.imsave(data, file_path)
+    def write(self, ui, data_item, file_path, extension):
+        data = data_item.data
+        if data is not None:
+            tifffile.imsave(file_path, data)
+
 
 ImportExportManager.ImportExportManager().register_io_handler(TIFFImportExportHandler())
