@@ -36,10 +36,10 @@ class TIFFImportExportHandler(ImportExportManager.ImportExportHandler):
         return [data_element]
 
     def can_write(self, data_item, extension):
-        return len(data_item.spatial_shape) == 2
+        return data_item.maybe_data_source and len(data_item.maybe_data_source.dimensional_shape) == 2
 
     def write(self, ui, data_item, file_path, extension):
-        data = data_item.data
+        data = data_item.maybe_data_source.data
         if data is not None:
             if Image.is_data_rgb(data):
                 data = data[:,:,(2, 1, 0)]
