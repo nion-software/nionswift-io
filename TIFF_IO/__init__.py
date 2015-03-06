@@ -4,48 +4,63 @@
 
 # standard libraries
 import gettext
-import logging
 import warnings
 
 # third party libraries
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     import tifffile
+import numpy
 
 # local libraries
-from nion.swift.model import Image
-from nion.swift.model import ImportExportManager
+# None
 
 
 _ = gettext.gettext
 
 
-class TIFFImportExportHandler(ImportExportManager.ImportExportHandler):
+class TIFFIODelegate(object):
 
-    def __init__(self):
-        super(TIFFImportExportHandler, self).__init__(_("TIFF Files"), ["tif", "tiff"])
+    def __init__(self, api):
+        self.__api = api
+        self.io_handler_name = _("TIFF Files")
+        self.io_handler_extensions = ["tif", "tiff"]
 
-    def read_data_elements(self, ui, extension, file_path):
+    def read_data_and_metadata(self, extension, file_path):
         data = tifffile.imread(file_path)
-        if Image.is_data_rgb(data):
+        if data.dtype == numpy.uint8 and data.shape[-1] == 3 and len(data.shape) > 1:
             data = data[:,:,(2, 1, 0)]
-        if Image.is_data_rgba(data):
+        if data.dtype == numpy.uint8 and data.shape[-1] == 4 and len(data.shape) > 1:
             data = data[:,:,(2, 1, 0, 3)]
-        data_element = dict()
-        data_element["data"] = data
-        return [data_element]
+        return self.__api.create_data_and_metadata_from_data(data)
 
-    def can_write(self, data_item, extension):
-        return data_item.maybe_data_source and len(data_item.maybe_data_source.dimensional_shape) == 2
+    def can_write_data_and_metadata(self, data_and_metadata, extension):
+        return data_and_metadata.is_data_2d
 
-    def write(self, ui, data_item, file_path, extension):
-        data = data_item.maybe_data_source.data
+    def write_data_and_metadata(self, data_and_metadata, file_path, extension):
+        data = data_and_metadata.data
         if data is not None:
-            if Image.is_data_rgb(data):
+            if data.dtype == numpy.uint8 and data.shape[-1] == 3 and len(data.shape) > 1:
                 data = data[:,:,(2, 1, 0)]
-            if Image.is_data_rgba(data):
+            if data.dtype == numpy.uint8 and data.shape[-1] == 4 and len(data.shape) > 1:
                 data = data[:,:,(2, 1, 0, 3)]
             tifffile.imsave(file_path, data)
 
 
-ImportExportManager.ImportExportManager().register_io_handler(TIFFImportExportHandler())
+class TIFFIOExtension(object):
+
+    # required for Swift to recognize this as an extension class.
+    extension_id = "nion.swift.extensions.tiff_io"
+
+    def __init__(self, api_broker):
+        # grab the api object.
+        api = api_broker.get_api(version="1", ui_version="1")
+        # be sure to keep a reference or it will be closed immediately.
+        self.__io_handler_ref = api.create_data_and_metadata_io_handler(TIFFIODelegate(api))
+
+    def close(self):
+        # close will be called when the extension is unloaded. in turn, close any references so they get closed. this
+        # is not strictly necessary since the references will be deleted naturally when this object is deleted.
+        self.__io_handler_ref.close()
+        self.__io_handler_ref = None
+
