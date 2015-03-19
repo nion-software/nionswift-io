@@ -23,6 +23,7 @@ class TIFFIODelegate(object):
 
     def __init__(self, api):
         self.__api = api
+        self.io_handler_id = "tiff-io-handler"
         self.io_handler_name = _("TIFF Files")
         self.io_handler_extensions = ["tif", "tiff"]
 
