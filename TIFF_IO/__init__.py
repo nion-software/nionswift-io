@@ -9,7 +9,7 @@ import warnings
 # third party libraries
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
-    import tifffile
+    from TIFF_IO import tifffile
 import numpy
 
 # local libraries
