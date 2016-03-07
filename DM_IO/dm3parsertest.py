@@ -22,7 +22,7 @@ import numpy
 from PlugIns.io_dm3 import parse_dm3
 from PlugIns.io_dm3 import dm3_image_utils
 
-from nion.swift.model import Calibration
+from nion.data import Calibration
 
 
 class TestDM3ImportExportClass(unittest.TestCase):
