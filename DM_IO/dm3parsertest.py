@@ -6,21 +6,15 @@ Created on Sun May 19 07:58:10 2013
 """
 
 import array
+import io
 import logging
 import unittest
-
 import sys
-if sys.version < '3':
-    from io import BytesIO
-    import cStringIO as io
-else:
-    from io import BytesIO
-    import io
 
 import numpy
 
-from PlugIns.io_dm3 import parse_dm3
-from PlugIns.io_dm3 import dm3_image_utils
+from DM_IO import parse_dm3
+from DM_IO import dm3_image_utils
 
 from nion.data import Calibration
 
@@ -29,7 +23,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
 
     def check_write_then_read_matches(self, data, func, _assert=True):
         # we confirm that reading a written element returns the same value
-        s = BytesIO()
+        s = io.BytesIO()
         header = func(s, outdata=data)
         s.seek(0)
         if header is not None:
@@ -41,7 +35,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
         return r
 
     def test_dm_read_struct_types(self):
-        s = BytesIO()
+        s = io.BytesIO()
         types = [2, 2, 2]
         parse_dm3.dm_read_struct_types(s, outtypes=types)
         s.seek(0)
@@ -105,7 +99,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
             im.frombytes(numpy.random.bytes(64))
         im_tag = {"Data": im,
                   "Dimensions": [23, 45]}
-        s = BytesIO()
+        s = io.BytesIO()
         parse_dm3.parse_dm_tag_root(s, outdata=im_tag)
         s.seek(0)
         ret = parse_dm3.parse_dm_tag_root(s)
@@ -118,7 +112,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
         shapes = ((6, 4), (6, ), (6, 4, 2))
         for dtype in dtypes:
             for shape in shapes:
-                s = BytesIO()
+                s = io.BytesIO()
                 data_in = numpy.ones(shape, dtype)
                 dimensional_calibrations_in = list()
                 for index, dimension in enumerate(shape):
@@ -133,7 +127,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
                 self.assertEqual(dimensional_calibrations_in, dimensional_calibrations_out)
 
     def test_rgb_data_write_read_round_trip(self):
-        s = BytesIO()
+        s = io.BytesIO()
         data_in = (numpy.random.randn(6, 4, 3) * 255).astype(numpy.uint8)
         dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
         intensity_calibration_in = Calibration.Calibration(4, 5, "six")
@@ -146,7 +140,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
         # data_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
 
     def test_calibrations_write_read_round_trip(self):
-        s = BytesIO()
+        s = io.BytesIO()
         data_in = numpy.ones((6, 4), numpy.float32)
         dimensional_calibrations_in = [Calibration.Calibration(1.1, 2.1, "nm"), Calibration.Calibration(2, 3, u"µm")]
         intensity_calibration_in = Calibration.Calibration(4.4, 5.5, "six")
@@ -160,7 +154,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
         self.assertEqual(intensity_calibration_in, intensity_calibration_out)
 
     def test_metadata_write_read_round_trip(self):
-        s = BytesIO()
+        s = io.BytesIO()
         data_in = numpy.ones((6, 4), numpy.float32)
         dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
         intensity_calibration_in = Calibration.Calibration(4, 5, "six")
@@ -172,7 +166,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
         self.assertEqual(metadata_in, imported_metadata)
 
     def test_metadata_difficult_types_write_read_round_trip(self):
-        s = BytesIO()
+        s = io.BytesIO()
         data_in = numpy.ones((6, 4), numpy.float32)
         dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
         intensity_calibration_in = Calibration.Calibration(4, 5, "six")
@@ -183,6 +177,13 @@ class TestDM3ImportExportClass(unittest.TestCase):
         imported_metadata = metadata_out.get("imported_properties", dict())
         metadata_expected = {"one": [], "two": {}, "three": [1, 2]}
         self.assertEqual(metadata_expected, imported_metadata)
+
+    def disabled_test_series_data_ordering(self):
+        s = "/Users/cmeyer/Downloads/NEW_7FocalSeriesImages_Def_50000nm.dm3"
+        data_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
+        import pprint
+        pprint.pprint(metadata_out)
+        print(data_out.shape)
 
 # some functions for processing multiple files.
 # useful for testing reading and writing a large number of files.
