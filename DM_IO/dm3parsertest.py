@@ -121,10 +121,11 @@ class TestDM3ImportExportClass(unittest.TestCase):
                 metadata_in = dict()
                 dm3_image_utils.save_image(data_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, s)
                 s.seek(0)
-                data_out, dimensional_calibrations_out, _, _, _ = dm3_image_utils.load_image(s)
+                data_out, dimensional_calibrations_out, intensity_calibration_out, _, _ = dm3_image_utils.load_image(s)
                 self.assertTrue(numpy.array_equal(data_in, data_out))
                 dimensional_calibrations_out = [Calibration.Calibration(*d) for d in dimensional_calibrations_out]
                 self.assertEqual(dimensional_calibrations_in, dimensional_calibrations_out)
+                self.assertEqual(intensity_calibration_in, Calibration.Calibration(*intensity_calibration_out))
 
     def test_rgb_data_write_read_round_trip(self):
         s = io.BytesIO()

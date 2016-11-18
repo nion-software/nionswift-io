@@ -25,17 +25,12 @@ class DM3IODelegate(object):
 
     def read_data_and_metadata(self, extension, file_path):
         data, calibrations, intensity, title, properties = dm3_image_utils.load_image(file_path)
-        data_element = dict()
-        data_element["data"] = data
         dimensional_calibrations = list()
         for calibration in calibrations:
-            origin, scale, units = calibration[0], calibration[1], calibration[2]
-            scale = 1.0 if scale == 0.0 else scale  # sanity check
-            dimensional_calibrations.append(self.__api.create_calibration(-origin * scale, scale, units))
-        origin, scale, units = intensity[0], intensity[1], intensity[2]
-        scale = 1.0 if scale == 0.0 else scale  # sanity check
-        intensity_calibration = self.__api.create_calibration(-origin * scale, scale, units)
-        # data_element["title"] = title
+            offset, scale, units = calibration[0], calibration[1], calibration[2]
+            dimensional_calibrations.append(self.__api.create_calibration(offset, scale, units))
+        offset, scale, units = intensity[0], intensity[1], intensity[2]
+        intensity_calibration = self.__api.create_calibration(offset, scale, units)
         metadata = dict()
         metadata["hardware_source"] = properties
         return self.__api.create_data_and_metadata_from_data(data, dimensional_calibrations=dimensional_calibrations, intensity_calibration=intensity_calibration, metadata=metadata)
@@ -48,18 +43,10 @@ class DM3IODelegate(object):
         dimensional_calibrations = list()
         for dimensional_calibration in data_and_metadata.dimensional_calibrations:
             offset, scale, units = dimensional_calibration.offset, dimensional_calibration.scale, dimensional_calibration.units
-            if scale != 0.0:
-                origin = -offset / scale
-            else:
-                origin = 0.0
-            dimensional_calibrations.append(self.__api.create_calibration(origin, scale, units))
+            dimensional_calibrations.append(self.__api.create_calibration(offset, scale, units))
         intensity_calibration = data_and_metadata.intensity_calibration
         offset, scale, units = intensity_calibration.offset, intensity_calibration.scale, intensity_calibration.units
-        if scale != 0.0:
-            origin = -offset / scale
-        else:
-            origin = 0.0
-        intensity_calibration = self.__api.create_calibration(origin, scale, units)
+        intensity_calibration = self.__api.create_calibration(offset, scale, units)
         metadata = data_and_metadata.metadata
         with open(file_path, 'wb') as f:
             dm3_image_utils.save_image(data, dimensional_calibrations, intensity_calibration, metadata, f)

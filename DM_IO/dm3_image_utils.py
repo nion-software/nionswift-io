@@ -12,30 +12,23 @@
 # datratypes in describing the data.
 # from .parse_dm3 import *
 import logging
-import numpy as np
+import numpy
 
 from . import parse_dm3
 
-# conditional imports
-import sys
-if sys.version < '3':
-    def u(x=None):
-        return unicode(x if x is not None else str())
-    unicode_type = unicode
-    long_type = long
-    def str_to_utf16_bytes(s):
-        return bytes(s)
-else:
-    def u(x=None):
-        return str(x if x is not None else str())
-    unicode_type = str
-    long_type = int
-    def str_to_utf16_bytes(s):
-        return s.encode('utf-16')
+def u(x=None):
+    return str(x if x is not None else str())
+
+unicode_type = str
+
+long_type = int
+
+def str_to_utf16_bytes(s):
+    return s.encode('utf-16')
 
 structarray_to_np_map = {
-    ('d', 'd'): np.complex128,
-    ('f', 'f'): np.complex64}
+    ('d', 'd'): numpy.complex128,
+    ('f', 'f'): numpy.complex64}
 
 np_to_structarray_map = {v: k for k, v in iter(structarray_to_np_map.items())}
 
@@ -50,18 +43,18 @@ np_to_structarray_map = {v: k for k, v in iter(structarray_to_np_map.items())}
 # only way they're differentiated is via this type, not the raw type
 # in the tag file? And 8 is missing!
 dm_image_dtypes = {
-    1: ("int16", np.int16),
-    2: ("float32", np.float32),
-    3: ("Complex64", np.complex64),
-    6: ("uint8", np.int8),
-    7: ("int32", np.int32),
-    9: ("int8", np.int8),
-    10: ("uint16", np.uint16),
-    11: ("uint32", np.uint32),
-    12: ("float64", np.float64),
-    13: ("Complex128", np.complex128),
-    14: ("Bool", np.int8),
-    23: ("RGB", np.int32)
+    1: ("int16", numpy.int16),
+    2: ("float32", numpy.float32),
+    3: ("Complex64", numpy.complex64),
+    6: ("uint8", numpy.int8),
+    7: ("int32", numpy.int32),
+    9: ("int8", numpy.int8),
+    10: ("uint16", numpy.uint16),
+    11: ("uint32", numpy.uint32),
+    12: ("float64", numpy.float64),
+    13: ("Complex128", numpy.complex128),
+    14: ("Bool", numpy.int8),
+    23: ("RGB", numpy.int32)
 }
 
 
@@ -72,10 +65,10 @@ def imagedatadict_to_ndarray(imdict):
     arr = imdict['Data']
     im = None
     if isinstance(arr, parse_dm3.array.array):
-        im = np.asarray(arr, dtype=arr.typecode)
+        im = numpy.asarray(arr, dtype=arr.typecode)
     elif isinstance(arr, parse_dm3.structarray):
         t = tuple(arr.typecodes)
-        im = np.frombuffer(
+        im = numpy.frombuffer(
             arr.raw_data,
             dtype=structarray_to_np_map[t])
     # print "Image has dmimagetype", imdict["DataType"], "numpy type is", im.dtype
@@ -83,7 +76,7 @@ def imagedatadict_to_ndarray(imdict):
     assert imdict['PixelDepth'] == im.dtype.itemsize
     im = im.reshape(imdict['Dimensions'][::-1])
     if imdict["DataType"] == 23:  # RGB
-        im = im.view(np.uint8).reshape(im.shape + (-1, ))[..., :-1]  # strip A
+        im = im.view(numpy.uint8).reshape(im.shape + (-1, ))[..., :-1]  # strip A
         # NOTE: RGB -> BGR would be [:, :, ::-1]
     return im
 
@@ -100,17 +93,17 @@ def ndarray_to_imagedatadict(nparr):
         if v[1] == nparr.dtype.type:
             dm_type = k
             break
-    if dm_type is None and nparr.dtype == np.uint8 and nparr.shape[-1] in (3, 4):
+    if dm_type is None and nparr.dtype == numpy.uint8 and nparr.shape[-1] in (3, 4):
         ret["DataType"] = 23
         ret["PixelDepth"] = 4
         if nparr.shape[2] == 4:
-            rgb_view = nparr.view(np.int32).reshape(nparr.shape[:-1])  # squash the color into uint32
+            rgb_view = nparr.view(numpy.int32).reshape(nparr.shape[:-1])  # squash the color into uint32
         else:
             assert nparr.shape[2] == 3
-            rgba_image = np.empty(nparr.shape[:-1] + (4,), np.uint8)
+            rgba_image = numpy.empty(nparr.shape[:-1] + (4,), numpy.uint8)
             rgba_image[:,:,0:3] = nparr
             rgba_image[:,:,3] = 255
-            rgb_view = rgba_image.view(np.int32).reshape(rgba_image.shape[:-1])  # squash the color into uint32
+            rgb_view = rgba_image.view(numpy.int32).reshape(rgba_image.shape[:-1])  # squash the color into uint32
         ret["Dimensions"] = list(rgb_view.shape[::-1])
         ret["Data"] = parse_dm3.array.array(rgb_view.dtype.char, rgb_view.flatten())
     else:
@@ -194,33 +187,37 @@ def load_image(file):
     calibrations = []
     calibration_tags = image_tags['ImageData'].get('Calibrations', dict())
     for dimension in calibration_tags.get('Dimension', list()):
-        calibrations.append((dimension['Origin'], dimension['Scale'], dimension['Units']))
+        origin, scale, units = dimension.get('Origin', 0.0), dimension.get('Scale', 1.0), dimension.get('Units', str())
+        calibrations.append((-origin * scale, scale, units))
+    calibrations = tuple(reversed(calibrations))
+    if len(data.shape) == 3 and data.dtype != numpy.uint8:
+        data = numpy.moveaxis(data, 0, 2)
+        calibrations = tuple(calibrations[1:]) + (calibrations[0],)
     brightness = calibration_tags.get('Brightness', dict())
-    intensity = brightness.get('Origin', 0.0), brightness.get('Scale', 1.0), brightness.get('Units', str())
+    origin, scale, units = brightness.get('Origin', 0.0), brightness.get('Scale', 1.0), brightness.get('Units', str())
+    intensity = -origin * scale, scale, units
     title = image_tags.get('Name')
     properties = dict()
-    voltage = None
     if 'ImageTags' in image_tags:
         properties["imported_properties"] = image_tags['ImageTags']
         voltage = image_tags['ImageTags'].get('ImageScanned', dict()).get('EHT', dict())
         if voltage:
             properties["autostem"] = { "high_tension_v": float(voltage) }
             properties["extra_high_tension"] = float(voltage)  # TODO: file format: remove extra_high_tension
-    return data, tuple(reversed(calibrations)), intensity, title, properties
+    return data, tuple(calibrations), intensity, title, properties
 
 
 def save_image(data, dimensional_calibrations, intensity_calibration, metadata, file):
     """
     Saves the nparray data to the file-like object (or string) file.
-    If file is a string the file is created and written to
     """
-    if isinstance(file, str):
-        with open(file, "wb") as f:
-            return save_image(n, f)
     # we need to create a basic DM tree suitable for an image
     # we'll try the minimum: just an data list
     # doesn't work. Do we need a ImageSourceList too?
     # and a DocumentObjectList?
+    if len(data.shape) == 3 and data.dtype != numpy.uint8:
+        data = numpy.moveaxis(data, 2, 0)
+        dimensional_calibrations = (dimensional_calibrations[2],) + tuple(dimensional_calibrations[0:2])
     data_dict = ndarray_to_imagedatadict(data)
     ret = {}
     ret["ImageList"] = [{"ImageData": data_dict}]
@@ -228,13 +225,21 @@ def save_image(data, dimensional_calibrations, intensity_calibration, metadata, 
         dimension_list = data_dict.setdefault("Calibrations", dict()).setdefault("Dimension", list())
         for dimensional_calibration in reversed(dimensional_calibrations):
             dimension = dict()
-            dimension['Origin'] = dimensional_calibration.offset
+            if dimensional_calibration.scale != 0.0:
+                origin = -dimensional_calibration.offset / dimensional_calibration.scale
+            else:
+                origin = 0.0
+            dimension['Origin'] = origin
             dimension['Scale'] = dimensional_calibration.scale
             dimension['Units'] = u(dimensional_calibration.units)
             dimension_list.append(dimension)
     if intensity_calibration:
+        if intensity_calibration.scale != 0.0:
+            origin = -intensity_calibration.offset / intensity_calibration.scale
+        else:
+            origin = 0.0
         brightness = data_dict.setdefault("Calibrations", dict()).setdefault("Brightness", dict())
-        brightness['Origin'] = intensity_calibration.offset
+        brightness['Origin'] = origin
         brightness['Scale'] = intensity_calibration.scale
         brightness['Units'] = str(intensity_calibration.units)
     # I think ImageSource list creates a mapping between ImageSourceIds and Images
