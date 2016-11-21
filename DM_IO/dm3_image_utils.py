@@ -199,11 +199,10 @@ def load_image(file):
     title = image_tags.get('Name')
     properties = dict()
     if 'ImageTags' in image_tags:
-        properties["imported_properties"] = image_tags['ImageTags']
+        properties.update(image_tags['ImageTags'])
         voltage = image_tags['ImageTags'].get('ImageScanned', dict()).get('EHT', dict())
         if voltage:
-            properties["autostem"] = { "high_tension_v": float(voltage) }
-            properties["extra_high_tension"] = float(voltage)  # TODO: file format: remove extra_high_tension
+            properties.setdefault("hardware_source", dict())["autostem"] = { "high_tension_v": float(voltage) }
     return data, tuple(calibrations), intensity, title, properties
 
 

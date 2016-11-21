@@ -24,15 +24,13 @@ class DM3IODelegate(object):
         self.io_handler_extensions = ["dm3", "dm4"]
 
     def read_data_and_metadata(self, extension, file_path):
-        data, calibrations, intensity, title, properties = dm3_image_utils.load_image(file_path)
+        data, calibrations, intensity, title, metadata = dm3_image_utils.load_image(file_path)
         dimensional_calibrations = list()
         for calibration in calibrations:
             offset, scale, units = calibration[0], calibration[1], calibration[2]
             dimensional_calibrations.append(self.__api.create_calibration(offset, scale, units))
         offset, scale, units = intensity[0], intensity[1], intensity[2]
         intensity_calibration = self.__api.create_calibration(offset, scale, units)
-        metadata = dict()
-        metadata["hardware_source"] = properties
         return self.__api.create_data_and_metadata_from_data(data, dimensional_calibrations=dimensional_calibrations, intensity_calibration=intensity_calibration, metadata=metadata)
 
     def can_write_data_and_metadata(self, data_and_metadata, extension):

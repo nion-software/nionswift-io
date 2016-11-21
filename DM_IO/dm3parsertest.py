@@ -163,8 +163,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
         dm3_image_utils.save_image(data_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, s)
         s.seek(0)
         data_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
-        imported_metadata = metadata_out.get("imported_properties", dict())
-        self.assertEqual(metadata_in, imported_metadata)
+        self.assertEqual(metadata_in, metadata_out)
 
     def test_metadata_difficult_types_write_read_round_trip(self):
         s = io.BytesIO()
@@ -175,9 +174,8 @@ class TestDM3ImportExportClass(unittest.TestCase):
         dm3_image_utils.save_image(data_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, s)
         s.seek(0)
         data_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
-        imported_metadata = metadata_out.get("imported_properties", dict())
         metadata_expected = {"one": [], "two": {}, "three": [1, 2]}
-        self.assertEqual(metadata_expected, imported_metadata)
+        self.assertEqual(metadata_out, metadata_expected)
 
     def disabled_test_series_data_ordering(self):
         s = "/Users/cmeyer/Downloads/NEW_7FocalSeriesImages_Def_50000nm.dm3"
