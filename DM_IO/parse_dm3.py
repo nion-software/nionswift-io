@@ -1,28 +1,18 @@
 import array
+import io
 import struct
 import logging
 import re
 
-# conditional imports
-import sys
-if sys.version < '3':
-    import StringIO as io
-    def u(x=None, y=None):
-        return unicode(x if x is not None else str(), y)
-    unicode_type = unicode
-    long_type = long
-    file_type = file
-    def str_to_iso8859_bytes(s):
-        return bytes(s)
-else:
-    import io
-    def u(x=None, y=None):
-        return str(x if x is not None else str(), y)
-    unicode_type = str
-    long_type = int
-    file_type = io.IOBase
-    def str_to_iso8859_bytes(s):
-        return bytes(s, 'ISO-8859-1')
+def u(x=None, y=None):
+    return str(x if x is not None else str(), y)
+
+unicode_type = str
+long_type = int
+file_type = io.IOBase
+
+def str_to_iso8859_bytes(s):
+    return bytes(s, 'ISO-8859-1')
 
 # mfm 2013-11-15 initial dm4 support
 # this should probably migrate into a class at some point.
