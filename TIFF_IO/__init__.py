@@ -329,6 +329,24 @@ class TIFFIODelegate(object):
             # make sure "resolution" is always a 2-tuple
             if resolution is not None and len(resolution) < 2:
                 resolution += (1, )
+            
+            # patch "resolution" such that it does not lead to an OverflowError when saving with tifffile.py. The
+            # resolution in tif is saved as ratio of two unsigned 32 bit integers. Tifffile.py creates the integer
+            # ratio with a maximum denominator of 1e6, which means that for resolutions > 2**32-1/1e6 = 4294.967295
+            # there is a risk of getting an OverflowError when trying to save the integer ratio with 32 bit precision.
+            # We also have to make the numbers in "resolution" positive.
+            if (numpy.array(resolution) < 0).any():
+                resolution = tuple(numpy.abs(resolution))
+                
+            if (numpy.array(resolution) > (2**32-1)/1e6).any():
+                patched_resolution = numpy.array(resolution)
+                possible_numbers = (2**32-1)/(1e6-numpy.arange(1e6))
+                if resolution[0] > (2**32-1)/1e6:
+                    patched_resolution[0] = possible_numbers[numpy.argmin(numpy.abs(possible_numbers-resolution[0]))]
+                if resolution[1] > (2**32-1)/1e6:
+                    patched_resolution[1] = possible_numbers[numpy.argmin(numpy.abs(possible_numbers-resolution[1]))]
+                resolution = tuple(patched_resolution)
+            
             # add unit to tif tags
             if unit is not None:
                 tifffile_metadata['unit'] = unit
