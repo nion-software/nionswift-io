@@ -119,7 +119,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
                     dimensional_calibrations_in.append(Calibration.Calibration(1.0 + 0.1 * index, 2.0 + 0.2 * index, "µ" + "n" * index))
                 intensity_calibration_in = Calibration.Calibration(4, 5, "six")
                 metadata_in = dict()
-                dm3_image_utils.save_image(data_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, s)
+                dm3_image_utils.save_image(data_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, None, None, None, s)
                 s.seek(0)
                 data_out, dimensional_calibrations_out, intensity_calibration_out, _, _ = dm3_image_utils.load_image(s)
                 self.assertTrue(numpy.array_equal(data_in, data_out))
@@ -133,7 +133,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
         dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
         intensity_calibration_in = Calibration.Calibration(4, 5, "six")
         metadata_in = {"abc": None, "": "", "one": [], "two": {}, "three": [1, None, 2]}
-        dm3_image_utils.save_image(data_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, s)
+        dm3_image_utils.save_image(data_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, None, None, None, s)
         s.seek(0)
         data_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
         self.assertTrue(numpy.array_equal(data_in, data_out))
@@ -146,7 +146,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
         dimensional_calibrations_in = [Calibration.Calibration(1.1, 2.1, "nm"), Calibration.Calibration(2, 3, u"µm")]
         intensity_calibration_in = Calibration.Calibration(4.4, 5.5, "six")
         metadata_in = dict()
-        dm3_image_utils.save_image(data_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, s)
+        dm3_image_utils.save_image(data_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, None, None, None, s)
         s.seek(0)
         data_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
         dimensional_calibrations_out = [Calibration.Calibration(*d) for d in dimensional_calibrations_out]
@@ -160,7 +160,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
         dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
         intensity_calibration_in = Calibration.Calibration(4, 5, "six")
         metadata_in = {"abc": 1, "def": "abc", "efg": { "one": 1, "two": "TWO", "three": [3, 4, 5] }}
-        dm3_image_utils.save_image(data_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, s)
+        dm3_image_utils.save_image(data_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, None, None, None, s)
         s.seek(0)
         data_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
         self.assertEqual(metadata_in, metadata_out)
@@ -171,7 +171,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
         dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
         intensity_calibration_in = Calibration.Calibration(4, 5, "six")
         metadata_in = {"abc": None, "": "", "one": [], "two": {}, "three": [1, None, 2]}
-        dm3_image_utils.save_image(data_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, s)
+        dm3_image_utils.save_image(data_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, None, None, None, s)
         s.seek(0)
         data_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
         metadata_expected = {"one": [], "two": {}, "three": [1, 2]}

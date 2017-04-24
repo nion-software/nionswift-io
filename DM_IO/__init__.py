@@ -46,8 +46,11 @@ class DM3IODelegate(object):
         offset, scale, units = intensity_calibration.offset, intensity_calibration.scale, intensity_calibration.units
         intensity_calibration = self.__api.create_calibration(offset, scale, units)
         metadata = data_and_metadata.metadata
+        timestamp = data_and_metadata.timestamp
+        timezone = data_and_metadata.timezone
+        timezone_offset = data_and_metadata.timezone_offset
         with open(file_path, 'wb') as f:
-            dm3_image_utils.save_image(data, dimensional_calibrations, intensity_calibration, metadata, f)
+            dm3_image_utils.save_image(data, dimensional_calibrations, intensity_calibration, metadata, timestamp, timezone, timezone_offset, f)
 
 
 def load_image(file_path):

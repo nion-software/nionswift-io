@@ -206,7 +206,7 @@ def load_image(file):
     return data, tuple(calibrations), intensity, title, properties
 
 
-def save_image(data, dimensional_calibrations, intensity_calibration, metadata, file):
+def save_image(data, dimensional_calibrations, intensity_calibration, metadata, modified, timezone, timezone_offset, file):
     """
     Saves the nparray data to the file-like object (or string) file.
     """
@@ -241,6 +241,22 @@ def save_image(data, dimensional_calibrations, intensity_calibration, metadata, 
         brightness['Origin'] = origin
         brightness['Scale'] = intensity_calibration.scale
         brightness['Units'] = str(intensity_calibration.units)
+    if modified:
+        timezone_str = None
+        if timezone_str is None and timezone:
+            try:
+                import pytz
+                tz = pytz.timezone(timezone)
+                timezone_str = tz.tzname(modified)
+            except:
+                pass
+        if timezone_str is None and timezone_offset:
+            timezone_str = timezone_offset
+        timezone_str = " " + timezone_str if timezone_str is not None else ""
+        date_str = modified.strftime("%x")
+        time_str = modified.strftime("%X") + timezone_str
+        ret["ImageSourceList"] = {"Acquisition Date": date_str, "Acquisition Time": time_str}
+        print(ret["ImageSourceList"])
     # I think ImageSource list creates a mapping between ImageSourceIds and Images
     ret["ImageSourceList"] = [{"ClassName": "ImageSource:Simple", "Id": [0], "ImageRef": 0}]
     # I think this lists the sources for the DocumentObjectlist. The source number is not
