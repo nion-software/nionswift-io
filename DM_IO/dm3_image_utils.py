@@ -256,7 +256,6 @@ def save_image(data, dimensional_calibrations, intensity_calibration, metadata, 
         date_str = modified.strftime("%x")
         time_str = modified.strftime("%X") + timezone_str
         ret["ImageSourceList"] = {"Acquisition Date": date_str, "Acquisition Time": time_str}
-        print(ret["ImageSourceList"])
     # I think ImageSource list creates a mapping between ImageSourceIds and Images
     ret["ImageSourceList"] = [{"ClassName": "ImageSource:Simple", "Id": [0], "ImageRef": 0}]
     # I think this lists the sources for the DocumentObjectlist. The source number is not
