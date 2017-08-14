@@ -16,6 +16,7 @@ setuptools.setup(
     description="IO handlers for NionSwift.",
     url="https://github.com/nion-software/nionswift-io",
     packages=["nionswift_plugin.DM_IO", "nionswift_plugin.TIFF_IO"],
+    install_requires=['nionswift'],
     license='GPLv3',
     classifiers=[
         "Development Status :: 2 - Pre-Alpha",
