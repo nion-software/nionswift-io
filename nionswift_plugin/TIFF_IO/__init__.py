@@ -32,22 +32,23 @@ _ = gettext.gettext
 NION_TAG = 'nion.1'
 
 
-class TIFFIODelegate(object):
+class TIFFIODelegateBase:
 
     def __init__(self, api):
         self.__api = api
-        self.io_handler_id = "tiff-io-handler"
-        self.io_handler_name = _("TIFF Files")
         self.io_handler_extensions = ["tif", "tiff"]
 
     def read_data_and_metadata(self, extension, file_path):
+        return self.read_data_and_metadata_from_stream(file_path)
+
+    def read_data_and_metadata_from_stream(self, stream):
         x_resolution = y_resolution = unit = x_offset = y_offset = None
         data_element_dict = None
         dimensional_calibrations = intensity_calibration = timestamp = data_descriptor = metadata = None
         # Imagej axes names
         images = channels = slices = frames = None
 
-        with tifffile.TiffFile(file_path) as tiffimage:
+        with tifffile.TiffFile(stream) as tiffimage:
             # TODO: Check whether support for multiple tif pages is necessary (for imagej compatible tifs it isn't)
             # Non-imagej compatible tifs are written (by tifffile.py) into multiple pages if they have more than 2 dimensions
             # There is also a 'shape' attribute that describes the original shape for those files. This information could be used
@@ -80,7 +81,9 @@ class TIFFIODelegate(object):
                     except ValueError as detail:
                         print(detail)
                 try:
-                    data_element_dict = json.loads(description_dict.get(NION_TAG))
+                    nion_properties = description_dict.get(NION_TAG)
+                    if nion_properties:
+                        data_element_dict = json.loads(nion_properties)
                 except Exception as detail:
                     print(detail)
 
@@ -178,7 +181,7 @@ class TIFFIODelegate(object):
         # create data info objects
         if data_element_dict is not None:
             dimensional_calibrations, intensity_calibration, timestamp, data_descriptor, metadata = (
-                                                       self.create_data_info_objects_from_data_element_dict(data_element_dict))
+                                                       self.__create_data_info_objects_from_data_element_dict(data_element_dict))
 
         # remove calibrations if their number is wrong
         if dimensional_calibrations is not None and len(dimensional_calibrations) != len(data_shape):
@@ -249,18 +252,89 @@ class TIFFIODelegate(object):
                                                                 metadata, timestamp, data_descriptor)
         return data_and_metadata
 
+    def write_data_item(self, data_item, file_path, extension) -> None:
+        self.write_data_item_stream(data_item, file_path)
+
+    def __create_data_info_objects_from_data_element_dict(self, metadata_dict):
+        dimensional_calibrations = intensity_calibration = timestamp = data_descriptor = metadata = None
+        if metadata_dict.get('spatial_calibrations') is not None:
+            dimensional_calibrations = []
+            for calibration in metadata_dict['spatial_calibrations']:
+                dimensional_calibrations.append(self.__api.create_calibration(offset=calibration.get('offset'), scale=calibration.get('scale'), units=calibration.get('units')))
+        if metadata_dict.get('intensity_calibration') is not None:
+            calibration = metadata_dict['intensity_calibration']
+            intensity_calibration = self.__api.create_calibration(offset=calibration.get('offset'),  scale=calibration.get('scale'), units=calibration.get('units'))
+        if not None in [metadata_dict.get('collection_dimension_count'), metadata_dict.get('datum_dimension_count')]:
+            data_descriptor = self.__api.create_data_descriptor(metadata_dict.get('is_sequence', False), metadata_dict.get('collection_dimension_count'), metadata_dict.get('datum_dimension_count'))
+        if metadata_dict.get('properties') is not None:
+            metadata = {'hardware_source': metadata_dict['properties']}
+        if metadata_dict.get('timestamp') is not None:
+            timestamp = datetime.datetime.fromtimestamp(metadata_dict['timestamp'])
+        return dimensional_calibrations, intensity_calibration, timestamp, data_descriptor, metadata
+
+
+class TIFFIODelegate_Baseline(TIFFIODelegateBase):
+
+    def __init__(self, api):
+        super().__init__(api)
+        self.io_handler_id = "tiff-io-handler-baseline"
+        self.io_handler_name = _("TIFF Files (Baseline)")
+
     def can_write_data_and_metadata(self, data_and_metadata, extension):
+        if data_and_metadata.is_sequence:
+            return False
+        if data_and_metadata.collection_dimension_count == 2 and data_and_metadata.datum_dimension_count == 0:
+            return True
+        if data_and_metadata.collection_dimension_count == 0 and data_and_metadata.datum_dimension_count == 2:
+            return True
+        return False
+
+    def write_data_item_stream(self, data_item, stream) -> None:
+        self.write_data_and_metadata_stream(data_item.display_xdata, stream)
+
+    def write_data_and_metadata_stream(self, data_and_metadata, stream) -> None:
+        data = data_and_metadata.data
+
+        if data is not None:
+            # check and adapt for rgb(a) data ordering
+            if data_and_metadata.is_data_rgb:
+                data = data[...,(2, 1, 0)]
+            elif data_and_metadata.is_data_rgba:
+                data = data[...,(2, 1, 0, 3)]
+            else:
+                data_min = numpy.amin(data)
+                data_range = numpy.ptp(data)
+                if data_range != 0.0:
+                    data_01 = (data - data_min) / data_range
+                else:
+                    data_01 = numpy.zeros(data.shape, numpy.uint16)
+                data = (data_01 * 65535).astype(numpy.uint16)
+
+            tifffile.imsave(stream, data, software='Nion Swift')
+
+
+class TIFFIODelegate_ImageJ(TIFFIODelegateBase):
+
+    def __init__(self, api):
+        super().__init__(api)
+        self.io_handler_id = "tiff-io-handler-imagej"
+        self.io_handler_name = _("TIFF Files (ImageJ)")
+
+    def can_write_data_and_metadata(self, data_and_metadata, extension) -> bool:
         # return data_and_metadata.is_data_2d or data_and_metadata.is_data_1d or data_and_metadata.is_data_3d
         return len(data_and_metadata.data_shape) < 5
 
-    def write_data_and_metadata(self, data_and_metadata, file_path, extension):
+    def write_data_item_stream(self, data_item, stream) -> None:
+        self.write_data_and_metadata_stream(data_item.xdata, stream)
+
+    def write_data_and_metadata_stream(self, data_and_metadata, stream) -> None:
         data = data_and_metadata.data
         tifffile_metadata = {}
 
         calibrations = data_and_metadata.dimensional_calibrations
 
         tifffile_metadata['unit'] = ''
-        metadata_dict = self.extract_data_element_dict_from_data_and_metadata(data_and_metadata)
+        metadata_dict = self.__extract_data_element_dict_from_data_and_metadata(data_and_metadata)
         tifffile_metadata[NION_TAG] = json.dumps(metadata_dict)
 
         if data is not None:
@@ -329,7 +403,7 @@ class TIFFIODelegate(object):
             # make sure "resolution" is always a 2-tuple
             if resolution is not None and len(resolution) < 2:
                 resolution += (1, )
-            
+
             # patch "resolution" such that it does not lead to an OverflowError when saving with tifffile.py. The
             # resolution in tif is saved as ratio of two unsigned 32 bit integers. Tifffile.py creates the integer
             # ratio with a maximum denominator of 1e6, which means that for resolutions > 2**32-1/1e6 = 4294.967295
@@ -337,7 +411,7 @@ class TIFFIODelegate(object):
             # We also have to make the numbers in "resolution" positive.
             if (numpy.array(resolution) < 0).any():
                 resolution = tuple(numpy.abs(resolution))
-                
+
             if (numpy.array(resolution) > (2**32-1)/1e6).any():
                 patched_resolution = numpy.array(resolution)
                 possible_numbers = (2**32-1)/(1e6-numpy.arange(1e6))
@@ -346,7 +420,7 @@ class TIFFIODelegate(object):
                 if resolution[1] > (2**32-1)/1e6:
                     patched_resolution[1] = possible_numbers[numpy.argmin(numpy.abs(possible_numbers-resolution[1]))]
                 resolution = tuple(patched_resolution)
-            
+
             # add unit to tif tags
             if unit is not None:
                 tifffile_metadata['unit'] = unit
@@ -357,12 +431,12 @@ class TIFFIODelegate(object):
             if not data.dtype in [numpy.float32, numpy.uint8, numpy.uint16]:
                 data = data.astype(numpy.float32)
             try:
-                tifffile.imsave(file_path, data, resolution=resolution, imagej=True, metadata=tifffile_metadata, software='Nion Swift')
+                tifffile.imsave(stream, data, resolution=resolution, imagej=True, metadata=tifffile_metadata, software='Nion Swift')
             except Exception as detail:
-                tifffile.imsave(file_path, data, resolution=resolution, metadata=tifffile_metadata)
+                tifffile.imsave(stream, data, resolution=resolution, metadata=tifffile_metadata)
                 logging.warn('Could not save metadata in tiff. Reason: ' + str(detail))
 
-    def extract_data_element_dict_from_data_and_metadata(self, data_and_metadata):
+    def __extract_data_element_dict_from_data_and_metadata(self, data_and_metadata):
         metadata_dict = {}
         dimensional_calibrations = data_and_metadata.dimensional_calibrations
         if dimensional_calibrations is not None:
@@ -384,22 +458,7 @@ class TIFFIODelegate(object):
         metadata_dict['timestamp'] = data_and_metadata.timestamp.timestamp()
         return metadata_dict
 
-    def create_data_info_objects_from_data_element_dict(self, metadata_dict):
-        dimensional_calibrations = intensity_calibration = timestamp = data_descriptor = metadata = None
-        if metadata_dict.get('spatial_calibrations') is not None:
-            dimensional_calibrations = []
-            for calibration in metadata_dict['spatial_calibrations']:
-                dimensional_calibrations.append(self.__api.create_calibration(offset=calibration.get('offset'), scale=calibration.get('scale'), units=calibration.get('units')))
-        if metadata_dict.get('intensity_calibration') is not None:
-            calibration = metadata_dict['intensity_calibration']
-            intensity_calibration = self.__api.create_calibration(offset=calibration.get('offset'),  scale=calibration.get('scale'), units=calibration.get('units'))
-        if not None in [metadata_dict.get('collection_dimension_count'), metadata_dict.get('datum_dimension_count')]:
-            data_descriptor = self.__api.create_data_descriptor(metadata_dict.get('is_sequence', False), metadata_dict.get('collection_dimension_count'), metadata_dict.get('datum_dimension_count'))
-        if metadata_dict.get('properties') is not None:
-            metadata = {'hardware_source': metadata_dict['properties']}
-        if metadata_dict.get('timestamp') is not None:
-            timestamp = datetime.datetime.fromtimestamp(metadata_dict['timestamp'])
-        return dimensional_calibrations, intensity_calibration, timestamp, data_descriptor, metadata
+
 
 class TIFFIOExtension(object):
 
@@ -408,13 +467,16 @@ class TIFFIOExtension(object):
 
     def __init__(self, api_broker):
         # grab the api object.
-        api = api_broker.get_api(version="1", ui_version="1")
+        api = api_broker.get_api(version="~1.0")
         # be sure to keep a reference or it will be closed immediately.
-        self.__io_handler_ref = api.create_data_and_metadata_io_handler(TIFFIODelegate(api))
+        self.__io_handler1_ref = api.create_data_and_metadata_io_handler(TIFFIODelegate_Baseline(api))
+        self.__io_handler2_ref = api.create_data_and_metadata_io_handler(TIFFIODelegate_ImageJ(api))
 
     def close(self):
         # close will be called when the extension is unloaded. in turn, close any references so they get closed. this
         # is not strictly necessary since the references will be deleted naturally when this object is deleted.
-        self.__io_handler_ref.close()
-        self.__io_handler_ref = None
+        self.__io_handler1_ref.close()
+        self.__io_handler1_ref = None
+        self.__io_handler2_ref.close()
+        self.__io_handler2_ref = None
 
