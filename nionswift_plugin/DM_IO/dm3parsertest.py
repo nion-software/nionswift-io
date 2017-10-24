@@ -105,7 +105,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
         ret = parse_dm3.parse_dm_tag_root(s)
         self.assertEqual(im_tag["Data"], ret["Data"])
         self.assertEqual(im_tag["Dimensions"], ret["Dimensions"])
-        self.assert_((im_tag["Data"] == ret["Data"]))
+        self.assertTrue((im_tag["Data"] == ret["Data"]))
 
     def test_data_write_read_round_trip(self):
         dtypes = (numpy.float32, numpy.float64, numpy.complex64, numpy.complex128, numpy.int16, numpy.uint16, numpy.int32, numpy.uint32)
@@ -175,6 +175,18 @@ class TestDM3ImportExportClass(unittest.TestCase):
         s.seek(0)
         data_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
         metadata_expected = {"one": [], "two": {}, "three": [1, 2]}
+        self.assertEqual(metadata_out, metadata_expected)
+
+    def test_signal_type_round_trip(self):
+        s = io.BytesIO()
+        data_in = numpy.ones((12,), numpy.float32)
+        dimensional_calibrations_in = [Calibration.Calibration(1, 2, "eV")]
+        intensity_calibration_in = Calibration.Calibration(4, 5, "e")
+        metadata_in = {"hardware_source": {"signal_type": "EELS"}}
+        dm3_image_utils.save_image(data_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, None, None, None, s)
+        s.seek(0)
+        data_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
+        metadata_expected = {'hardware_source': {'signal_type': 'EELS'}, 'Meta Data': {'Format': 'Spectrum', 'Signal': 'EELS'}}
         self.assertEqual(metadata_out, metadata_expected)
 
     def disabled_test_series_data_ordering(self):

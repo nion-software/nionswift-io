@@ -11,6 +11,7 @@
 # from the tag file datatype. I think these are used more than the tag
 # datratypes in describing the data.
 # from .parse_dm3 import *
+import copy
 import logging
 import numpy
 
@@ -203,6 +204,9 @@ def load_image(file):
         voltage = image_tags['ImageTags'].get('ImageScanned', dict()).get('EHT', dict())
         if voltage:
             properties.setdefault("hardware_source", dict())["autostem"] = { "high_tension_v": float(voltage) }
+        dm_metadata_signal = image_tags['ImageTags'].get('Meta Data', dict()).get('Signal', dict())
+        if dm_metadata_signal == 'EELS':
+            properties.setdefault("hardware_source", dict())["signal_type"] = dm_metadata_signal
     return data, tuple(calibrations), intensity, title, properties
 
 
@@ -264,7 +268,12 @@ def save_image(data, dimensional_calibrations, intensity_calibration, metadata, 
     ret["DocumentObjectList"] = [{"ImageSource": 0, "AnnotationType": 20}]
     # finally some display options
     ret["Image Behavior"] = {"ViewDisplayID": 8}
-    ret["ImageList"][0]["ImageTags"] = metadata
+    dm_metadata = copy.deepcopy(metadata)
+    if metadata.get("hardware_source", dict()).get("signal_type") == "EELS":
+        if len(data.shape) == 1 or (len(data.shape) == 2 and data.shape[0] == 1):
+            dm_metadata.setdefault("Meta Data", dict())["Format"] = "Spectrum"
+            dm_metadata.setdefault("Meta Data", dict())["Signal"] = "EELS"
+    ret["ImageList"][0]["ImageTags"] = dm_metadata
     ret["InImageMode"] = 1
     parse_dm3.parse_dm_header(file, ret)
 
