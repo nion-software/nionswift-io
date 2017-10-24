@@ -205,7 +205,7 @@ def load_image(file):
         if voltage:
             properties.setdefault("hardware_source", dict())["autostem"] = { "high_tension_v": float(voltage) }
         dm_metadata_signal = image_tags['ImageTags'].get('Meta Data', dict()).get('Signal', dict())
-        if dm_metadata_signal == 'EELS':
+        if dm_metadata_signal and dm_metadata_signal.lower() == "eels":
             properties.setdefault("hardware_source", dict())["signal_type"] = dm_metadata_signal
     return data, tuple(calibrations), intensity, title, properties
 
@@ -269,7 +269,7 @@ def save_image(data, dimensional_calibrations, intensity_calibration, metadata, 
     # finally some display options
     ret["Image Behavior"] = {"ViewDisplayID": 8}
     dm_metadata = copy.deepcopy(metadata)
-    if metadata.get("hardware_source", dict()).get("signal_type") == "EELS":
+    if metadata.get("hardware_source", dict()).get("signal_type", "").lower() == "eels":
         if len(data.shape) == 1 or (len(data.shape) == 2 and data.shape[0] == 1):
             dm_metadata.setdefault("Meta Data", dict())["Format"] = "Spectrum"
             dm_metadata.setdefault("Meta Data", dict())["Signal"] = "EELS"
