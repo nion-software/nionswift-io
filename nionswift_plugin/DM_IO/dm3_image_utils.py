@@ -163,7 +163,7 @@ def fix_strings(d):
         return l
     elif isinstance(d, parse_dm3.array.array):
         if d.typecode == 'H':
-            return d.tostring().decode("utf-16")
+            return d.tobytes().decode("utf-16")
         else:
             return d.tolist()
     else:

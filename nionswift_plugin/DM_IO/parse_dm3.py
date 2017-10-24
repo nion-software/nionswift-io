@@ -541,13 +541,13 @@ def dm_read_array(f, outdata=None):
                 print("typecode %s" % outdata.typecode)
             assert dtype >= 0
             put_into_file(f, "> l", dtype)
-            put_into_file(f, "> L", int(len(outdata.tostring()) / struct.calcsize(outdata.typecode)))
+            put_into_file(f, "> L", int(len(outdata.tobytes()) / struct.calcsize(outdata.typecode)))
             if verbose:
                 print("dm_write_array2 end", dtype, len(outdata), outdata.typecode, f.tell())
             if isinstance(f, file_type):
                 outdata.tofile(f)
             else:
-                f.write(outdata.tostring())
+                f.write(outdata.tobytes())
             if verbose:
                 print("dm_write_array3 end", f.tell())
             return array_header
@@ -600,7 +600,7 @@ def dm_read_array(f, outdata=None):
                 else:
                     ret.fromstring(f.read(alen*struct.calcsize(ret.typecode)))
             # if dtype == get_dmtype_for_name('ushort'):
-            #     ret = ret.tostring().decode("utf-16")
+            #     ret = ret.tobytes().decode("utf-16")
             if verbose:
                 print("dm_read_array3 end", f.tell())
             return ret, array_header
