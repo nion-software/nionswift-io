@@ -120,31 +120,26 @@ def ndarray_to_imagedatadict(nparr):
     return ret
 
 
-import types
 def display_keys(tag, indent=None):
     indent = indent if indent is not None else str()
-    if isinstance(tag, types.ListType) or isinstance(tag, types.TupleType):
+    if isinstance(tag, list) or isinstance(tag, tuple):
         for i, v in enumerate(tag):
-            logging.debug("%s %s:", indent, i)
+            print("{0} {1}:".format(indent, i))
             display_keys(v, indent + "..")
-    elif isinstance(tag, types.DictType):
+    elif isinstance(tag, dict):
         for k, v in iter(tag.items()):
-            logging.debug("%s key: %s", indent, k)
+            print("{0} key: {1}".format(indent, k))
             display_keys(v, indent + "..")
-    elif isinstance(tag, types.BooleanType):
-        logging.debug("%s bool: %s", indent, tag)
-    elif isinstance(tag, types.IntType):
-        logging.debug("%s int: %s", indent, tag)
-    elif isinstance(tag, types.LongType):
-        logging.debug("%s long: %s", indent, tag)
-    elif isinstance(tag, types.FloatType):
-        logging.debug("%s float: %s", indent, tag)
-    elif isinstance(tag, types.StringType):
-        logging.debug("%s string: %s", indent, tag)
-    elif isinstance(tag, unicode_type):
-        logging.debug("%s unicode: %s", indent, tag)
+    elif isinstance(tag, bool):
+        print("{0} bool: {1}".format(indent, tag))
+    elif isinstance(tag, int):
+        print("{0} int: {1}".format(indent, tag))
+    elif isinstance(tag, float):
+        print("{0} float: {1}".format(indent, tag))
+    elif isinstance(tag, str):
+        print("{0} string: {1}".format(indent, tag))
     else:
-        logging.debug("%s %s: DATA", indent, type(tag))
+        print("{0} {1}: DATA".format(indent, type(tag)))
 
 
 def fix_strings(d):

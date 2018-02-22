@@ -13,8 +13,8 @@ import sys
 
 import numpy
 
-from DM_IO import parse_dm3
-from DM_IO import dm3_image_utils
+from nionswift_plugin.DM_IO import parse_dm3
+from nionswift_plugin.DM_IO import dm3_image_utils
 
 from nion.data import Calibration
 
