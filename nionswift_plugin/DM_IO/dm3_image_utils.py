@@ -82,6 +82,16 @@ def imagedatadict_to_ndarray(imdict):
     return im
 
 
+def platform_independent_char(dtype):
+    # windows and linux/macos treat dtype.char differently.
+    # on linux/macos where 'l' has size 8, ints of size 4 are reported as 'i'
+    # on windows where 'l' has size 4, ints of size 4 are reported as 'l'
+    # this function fixes that issue.
+    if numpy.dtype('int').itemsize == numpy.dtype('int32').itemsize and dtype.char == 'l': return 'i'
+    if numpy.dtype('uint').itemsize == numpy.dtype('uint32').itemsize and dtype.char == 'L': return 'I'
+    return dtype.char
+
+
 def ndarray_to_imagedatadict(nparr):
     """
     Convert the numpy array nparr into a suitable ImageList entry dictionary.
@@ -106,7 +116,7 @@ def ndarray_to_imagedatadict(nparr):
             rgba_image[:,:,3] = 255
             rgb_view = rgba_image.view(numpy.int32).reshape(rgba_image.shape[:-1])  # squash the color into uint32
         ret["Dimensions"] = list(rgb_view.shape[::-1])
-        ret["Data"] = parse_dm3.array.array(rgb_view.dtype.char, rgb_view.flatten())
+        ret["Data"] = parse_dm3.array.array(platform_independent_char(rgb_view.dtype), rgb_view.flatten())
     else:
         ret["DataType"] = dm_type
         ret["PixelDepth"] = nparr.dtype.itemsize
@@ -116,7 +126,7 @@ def ndarray_to_imagedatadict(nparr):
             ret["Data"] = parse_dm3.structarray(types)
             ret["Data"].raw_data = bytes(nparr.data)
         else:
-            ret["Data"] = parse_dm3.array.array(nparr.dtype.char, nparr.flatten())
+            ret["Data"] = parse_dm3.array.array(platform_independent_char(nparr.dtype), nparr.flatten())
     return ret
 
 
