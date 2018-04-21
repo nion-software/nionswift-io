@@ -10,13 +10,13 @@ import os
 
 setuptools.setup(
     name="nionswift-io",
-    version="0.0.1",
+    version="0.1.0",
     author="Nion Software",
     author_email="swift@nion.com",
     description="IO handlers for NionSwift.",
     url="https://github.com/nion-software/nionswift-io",
     packages=["nionswift_plugin.DM_IO", "nionswift_plugin.TIFF_IO"],
-    install_requires=['nionswift'],
+    install_requires=[],
     license='GPLv3',
     classifiers=[
         "Development Status :: 2 - Pre-Alpha",
