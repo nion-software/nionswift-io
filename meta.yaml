@@ -1,0 +1,38 @@
+package:
+  name: 'nionswift-io'
+  version: '0.13.0'
+
+source:
+  git_rev: 0.13.0
+  git_url: https://github.com/nion-software/nionswift-io.git
+
+build:
+  noarch: python
+  number: 0
+  script: python -m pip install --no-deps --ignore-installed .
+  include_recipe: False
+
+requirements:
+  host:
+    - python
+    - setuptools
+  run:
+    - python >=3.5
+    - nionutils >=0.3.10
+
+test:
+  imports:
+    - nionswift_plugin.DM_IO
+    - nionswift_plugin.DM_IO.test
+    - nionswift_plugin.TIFF_IO
+    - nionswift_plugin.TIFF_IO.test
+
+about:
+  home: https://github.com/nion-software/nionswift-io
+  license: Apache-2.0
+  summary: Nion UI classes.
+  description: "A package for adding I/O handlers to Nion Swift."
+
+extra:
+  recipe-maintainers:
+    cmeyer
