@@ -62,14 +62,14 @@ class TIFFIODelegateBase:
                 if tiffpage.tags.get('y_resolution') is not None:
                     y_resolution = tiffpage.tags['y_resolution'].value
                     y_resolution = y_resolution[0] / y_resolution[1]
-                if tiffpage.imagej_tags.get(NION_TAG) is not None:
-                    data_element_dict = json.loads(tiffpage.imagej_tags[NION_TAG])
-                unit = tiffpage.imagej_tags.get('unit')
-                images = tiffpage.imagej_tags.get('images')
-                channels = tiffpage.imagej_tags.get('channels')
-                slices = tiffpage.imagej_tags.get('slices')
-                frames = tiffpage.imagej_tags.get('frames')
-                # samples = tiffpage.imagej_tags.get('samples')
+                if tiffimage.imagej_metadata.get(NION_TAG) is not None:
+                    data_element_dict = json.loads(tiffimage.imagej_metadata[NION_TAG])
+                unit = tiffimage.imagej_metadata.get('unit')
+                images = tiffimage.imagej_metadata.get('images')
+                channels = tiffimage.imagej_metadata.get('channels')
+                slices = tiffimage.imagej_metadata.get('slices')
+                frames = tiffimage.imagej_metadata.get('frames')
+                # samples = tiffimage.imagej_metadata.get('samples')
 
             # Try to get Nion metadata if file is not imagej type
             if data_element_dict is None:
@@ -99,7 +99,7 @@ class TIFFIODelegateBase:
             # last data axis depends on whether data is rgb(a)
             last_data_axis = -1
             is_rgb = False
-            if tiffpage.photometric in ('rgb', 'palette'):
+            if tiffpage.photometric in (tifffile.TIFF.PHOTOMETRIC.RGB, tifffile.TIFF.PHOTOMETRIC.PALETTE):
                 # print('Image is rgb type, (shape: {})'.format(data.shape))
                 is_rgb = True
                 if expected_number_dimensions is not None:
