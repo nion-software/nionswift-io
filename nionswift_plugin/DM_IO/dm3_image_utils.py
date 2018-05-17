@@ -11,9 +11,11 @@
 # from the tag file datatype. I think these are used more than the tag
 # datratypes in describing the data.
 # from .parse_dm3 import *
+
 import copy
-import logging
 import numpy
+
+from nion.data import DataAndMetadata
 
 from . import parse_dm3
 
@@ -198,7 +200,12 @@ def load_image(file):
     calibrations = tuple(reversed(calibrations))
     if len(data.shape) == 3 and data.dtype != numpy.uint8:
         data = numpy.moveaxis(data, 0, 2)
+        data_descriptor = DataAndMetadata.DataDescriptor(False, 1, 2)
         calibrations = tuple(calibrations[1:]) + (calibrations[0],)
+    elif data.dtype == numpy.uint8:
+        data_descriptor = DataAndMetadata.DataDescriptor(False, 0, len(data.shape[:-1]))
+    else:
+        data_descriptor = DataAndMetadata.DataDescriptor(False, 0, len(data.shape))
     brightness = calibration_tags.get('Brightness', dict())
     origin, scale, units = brightness.get('Origin', 0.0), brightness.get('Scale', 1.0), brightness.get('Units', str())
     intensity = -origin * scale, scale, units
@@ -209,13 +216,19 @@ def load_image(file):
         voltage = image_tags['ImageTags'].get('ImageScanned', dict()).get('EHT', dict())
         if voltage:
             properties.setdefault("hardware_source", dict())["autostem"] = { "high_tension_v": float(voltage) }
-        dm_metadata_signal = image_tags['ImageTags'].get('Meta Data', dict()).get('Signal', dict())
+        dm_metadata_signal = image_tags['ImageTags'].get('Meta Data', dict()).get('Signal')
         if dm_metadata_signal and dm_metadata_signal.lower() == "eels":
             properties.setdefault("hardware_source", dict())["signal_type"] = dm_metadata_signal
-    return data, tuple(calibrations), intensity, title, properties
+        if image_tags['ImageTags'].get('Meta Data', dict()).get('Format') == "Spectrum":
+            data_descriptor.collection_dimension_count += data_descriptor.datum_dimension_count - 1
+            data_descriptor.datum_dimension_count = 1
+        if image_tags['ImageTags'].get('Meta Data', dict()).get('IsSequence', False) and data_descriptor.collection_dimension_count > 0:
+            data_descriptor.is_sequence = True
+            data_descriptor.collection_dimension_count -= 1
+    return data, data_descriptor, tuple(calibrations), intensity, title, properties
 
 
-def save_image(data, dimensional_calibrations, intensity_calibration, metadata, modified, timezone, timezone_offset, file):
+def save_image(data, data_descriptor, dimensional_calibrations, intensity_calibration, metadata, modified, timezone, timezone_offset, file):
     """
     Saves the nparray data to the file-like object (or string) file.
     """
@@ -278,6 +291,10 @@ def save_image(data, dimensional_calibrations, intensity_calibration, metadata, 
         if len(data.shape) == 1 or (len(data.shape) == 2 and data.shape[0] == 1):
             dm_metadata.setdefault("Meta Data", dict())["Format"] = "Spectrum"
             dm_metadata.setdefault("Meta Data", dict())["Signal"] = "EELS"
+    elif data_descriptor.datum_dimension_count == 1:
+        dm_metadata.setdefault("Meta Data", dict())["Format"] = "Spectrum"
+    if data_descriptor.is_sequence:
+        dm_metadata.setdefault("Meta Data", dict())["IsSequence"] = True
     ret["ImageList"][0]["ImageTags"] = dm_metadata
     ret["InImageMode"] = 1
     parse_dm3.parse_dm_header(file, ret)

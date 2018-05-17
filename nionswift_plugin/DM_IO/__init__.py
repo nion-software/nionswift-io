@@ -6,7 +6,7 @@
 import gettext
 
 # third party libraries
-# None
+from nion.data import DataAndMetadata
 
 # local libraries
 from . import dm3_image_utils
@@ -24,20 +24,21 @@ class DM3IODelegate(object):
         self.io_handler_extensions = ["dm3", "dm4"]
 
     def read_data_and_metadata(self, extension, file_path):
-        data, calibrations, intensity, title, metadata = dm3_image_utils.load_image(file_path)
+        data, data_descriptor, calibrations, intensity, title, metadata = dm3_image_utils.load_image(file_path)
         dimensional_calibrations = list()
         for calibration in calibrations:
             offset, scale, units = calibration[0], calibration[1], calibration[2]
             dimensional_calibrations.append(self.__api.create_calibration(offset, scale, units))
         offset, scale, units = intensity[0], intensity[1], intensity[2]
         intensity_calibration = self.__api.create_calibration(offset, scale, units)
-        return self.__api.create_data_and_metadata_from_data(data, dimensional_calibrations=dimensional_calibrations, intensity_calibration=intensity_calibration, metadata=metadata)
+        return DataAndMetadata.new_data_and_metadata(data, dimensional_calibrations=dimensional_calibrations, intensity_calibration=intensity_calibration, metadata=metadata, data_descriptor=data_descriptor)
 
     def can_write_data_and_metadata(self, data_and_metadata, extension):
         return extension == "dm3"
 
     def write_data_and_metadata(self, data_and_metadata, file_path, extension):
         data = data_and_metadata.data
+        data_descriptor = data_and_metadata.data_descriptor
         dimensional_calibrations = list()
         for dimensional_calibration in data_and_metadata.dimensional_calibrations:
             offset, scale, units = dimensional_calibration.offset, dimensional_calibration.scale, dimensional_calibration.units
@@ -50,7 +51,7 @@ class DM3IODelegate(object):
         timezone = data_and_metadata.timezone
         timezone_offset = data_and_metadata.timezone_offset
         with open(file_path, 'wb') as f:
-            dm3_image_utils.save_image(data, dimensional_calibrations, intensity_calibration, metadata, timestamp, timezone, timezone_offset, f)
+            dm3_image_utils.save_image(data, data_descriptor, dimensional_calibrations, intensity_calibration, metadata, timestamp, timezone, timezone_offset, f)
 
 
 def load_image(file_path):

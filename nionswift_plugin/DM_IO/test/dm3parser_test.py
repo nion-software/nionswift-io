@@ -17,6 +17,7 @@ from nionswift_plugin.DM_IO import parse_dm3
 from nionswift_plugin.DM_IO import dm3_image_utils
 
 from nion.data import Calibration
+from nion.data import DataAndMetadata
 
 
 class TestDM3ImportExportClass(unittest.TestCase):
@@ -109,9 +110,18 @@ class TestDM3ImportExportClass(unittest.TestCase):
 
     def test_data_write_read_round_trip(self):
         dtypes = (numpy.float32, numpy.float64, numpy.complex64, numpy.complex128, numpy.int16, numpy.uint16, numpy.int32, numpy.uint32)
-        shapes = ((6, 4), (6, ), (6, 4, 2))
+        shape_data_descriptors = (
+            ((6,), DataAndMetadata.DataDescriptor(False, 0, 1)),        # spectrum
+            ((6, 4), DataAndMetadata.DataDescriptor(False, 1, 1)),      # 1d collection of spectra
+            ((6, 8, 10), DataAndMetadata.DataDescriptor(False, 2, 1)),  # 2d collection of spectra
+            ((6, 4), DataAndMetadata.DataDescriptor(True, 0, 1)),       # sequence of spectra
+            ((6, 4), DataAndMetadata.DataDescriptor(False, 0, 2)),      # image
+            ((6, 4, 2), DataAndMetadata.DataDescriptor(False, 1, 2)),   # 1d collection of images
+            # ((6, 4, 2), DataAndMetadata.DataDescriptor(False, 2, 2)),   # 2d collection of images. not possible?
+            ((6, 8, 10), DataAndMetadata.DataDescriptor(True, 0, 2)),   # sequence of images
+        )
         for dtype in dtypes:
-            for shape in shapes:
+            for shape, data_descriptor_in in shape_data_descriptors:
                 s = io.BytesIO()
                 data_in = numpy.ones(shape, dtype)
                 dimensional_calibrations_in = list()
@@ -119,10 +129,11 @@ class TestDM3ImportExportClass(unittest.TestCase):
                     dimensional_calibrations_in.append(Calibration.Calibration(1.0 + 0.1 * index, 2.0 + 0.2 * index, "µ" + "n" * index))
                 intensity_calibration_in = Calibration.Calibration(4, 5, "six")
                 metadata_in = dict()
-                dm3_image_utils.save_image(data_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, None, None, None, s)
+                dm3_image_utils.save_image(data_in, data_descriptor_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, None, None, None, s)
                 s.seek(0)
-                data_out, dimensional_calibrations_out, intensity_calibration_out, _, _ = dm3_image_utils.load_image(s)
+                data_out, data_descriptor_out, dimensional_calibrations_out, intensity_calibration_out, _, _ = dm3_image_utils.load_image(s)
                 self.assertTrue(numpy.array_equal(data_in, data_out))
+                self.assertEqual(data_descriptor_in, data_descriptor_out)
                 dimensional_calibrations_out = [Calibration.Calibration(*d) for d in dimensional_calibrations_out]
                 self.assertEqual(dimensional_calibrations_in, dimensional_calibrations_out)
                 self.assertEqual(intensity_calibration_in, Calibration.Calibration(*intensity_calibration_out))
@@ -130,25 +141,28 @@ class TestDM3ImportExportClass(unittest.TestCase):
     def test_rgb_data_write_read_round_trip(self):
         s = io.BytesIO()
         data_in = (numpy.random.randn(6, 4, 3) * 255).astype(numpy.uint8)
+        data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
         dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
         intensity_calibration_in = Calibration.Calibration(4, 5, "six")
         metadata_in = {"abc": None, "": "", "one": [], "two": {}, "three": [1, None, 2]}
-        dm3_image_utils.save_image(data_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, None, None, None, s)
+        dm3_image_utils.save_image(data_in, data_descriptor_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, None, None, None, s)
         s.seek(0)
-        data_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
+        data_out, data_descriptor_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
         self.assertTrue(numpy.array_equal(data_in, data_out))
+        self.assertEqual(data_descriptor_in, data_descriptor_out)
         # s = "/Users/cmeyer/Desktop/EELS_CL.dm3"
-        # data_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
+        # data_out, data_descriptor, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
 
     def test_calibrations_write_read_round_trip(self):
         s = io.BytesIO()
         data_in = numpy.ones((6, 4), numpy.float32)
+        data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
         dimensional_calibrations_in = [Calibration.Calibration(1.1, 2.1, "nm"), Calibration.Calibration(2, 3, u"µm")]
         intensity_calibration_in = Calibration.Calibration(4.4, 5.5, "six")
         metadata_in = dict()
-        dm3_image_utils.save_image(data_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, None, None, None, s)
+        dm3_image_utils.save_image(data_in, data_descriptor_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, None, None, None, s)
         s.seek(0)
-        data_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
+        data_out, data_descriptor_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
         dimensional_calibrations_out = [Calibration.Calibration(*d) for d in dimensional_calibrations_out]
         self.assertEqual(dimensional_calibrations_in, dimensional_calibrations_out)
         intensity_calibration_out = Calibration.Calibration(*intensity_calibration_out)
@@ -157,41 +171,44 @@ class TestDM3ImportExportClass(unittest.TestCase):
     def test_metadata_write_read_round_trip(self):
         s = io.BytesIO()
         data_in = numpy.ones((6, 4), numpy.float32)
+        data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
         dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
         intensity_calibration_in = Calibration.Calibration(4, 5, "six")
         metadata_in = {"abc": 1, "def": "abc", "efg": { "one": 1, "two": "TWO", "three": [3, 4, 5] }}
-        dm3_image_utils.save_image(data_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, None, None, None, s)
+        dm3_image_utils.save_image(data_in, data_descriptor_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, None, None, None, s)
         s.seek(0)
-        data_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
+        data_out, data_descriptor_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
         self.assertEqual(metadata_in, metadata_out)
 
     def test_metadata_difficult_types_write_read_round_trip(self):
         s = io.BytesIO()
         data_in = numpy.ones((6, 4), numpy.float32)
+        data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
         dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
         intensity_calibration_in = Calibration.Calibration(4, 5, "six")
         metadata_in = {"abc": None, "": "", "one": [], "two": {}, "three": [1, None, 2]}
-        dm3_image_utils.save_image(data_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, None, None, None, s)
+        dm3_image_utils.save_image(data_in, data_descriptor_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, None, None, None, s)
         s.seek(0)
-        data_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
+        data_out, data_descriptor_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
         metadata_expected = {"one": [], "two": {}, "three": [1, 2]}
         self.assertEqual(metadata_out, metadata_expected)
 
     def test_signal_type_round_trip(self):
         s = io.BytesIO()
         data_in = numpy.ones((12,), numpy.float32)
+        data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 1)
         dimensional_calibrations_in = [Calibration.Calibration(1, 2, "eV")]
         intensity_calibration_in = Calibration.Calibration(4, 5, "e")
         metadata_in = {"hardware_source": {"signal_type": "EELS"}}
-        dm3_image_utils.save_image(data_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, None, None, None, s)
+        dm3_image_utils.save_image(data_in, data_descriptor_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, None, None, None, s)
         s.seek(0)
-        data_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
+        data_out, data_descriptor_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
         metadata_expected = {'hardware_source': {'signal_type': 'EELS'}, 'Meta Data': {'Format': 'Spectrum', 'Signal': 'EELS'}}
         self.assertEqual(metadata_out, metadata_expected)
 
     def disabled_test_series_data_ordering(self):
         s = "/Users/cmeyer/Downloads/NEW_7FocalSeriesImages_Def_50000nm.dm3"
-        data_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
+        data_out, data_descriptor_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
         import pprint
         pprint.pprint(metadata_out)
         print(data_out.shape)
