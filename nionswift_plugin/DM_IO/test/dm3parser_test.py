@@ -193,6 +193,19 @@ class TestDM3ImportExportClass(unittest.TestCase):
         metadata_expected = {"one": [], "two": {}, "three": [1, 2]}
         self.assertEqual(metadata_out, metadata_expected)
 
+    def test_metadata_export_large_integer(self):
+        s = io.BytesIO()
+        data_in = numpy.ones((6, 4), numpy.float32)
+        data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
+        dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
+        intensity_calibration_in = Calibration.Calibration(4, 5, "six")
+        metadata_in = {"abc": 999999999999}
+        dm3_image_utils.save_image(data_in, data_descriptor_in, dimensional_calibrations_in, intensity_calibration_in, metadata_in, None, None, None, s)
+        s.seek(0)
+        data_out, data_descriptor_out, dimensional_calibrations_out, intensity_calibration_out, title_out, metadata_out = dm3_image_utils.load_image(s)
+        metadata_expected = {"abc": 999999999999}
+        self.assertEqual(metadata_out, metadata_expected)
+
     def test_signal_type_round_trip(self):
         s = io.BytesIO()
         data_in = numpy.ones((12,), numpy.float32)

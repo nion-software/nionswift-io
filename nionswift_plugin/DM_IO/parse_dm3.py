@@ -342,6 +342,9 @@ def get_structdmtypes_for_python_typeorobject(typeorobj):
     else:
         comparer = lambda test: isinstance(typeorobj, test)
 
+    if comparer(int) and not -2**31 < typeorobj < 2**31 - 1:
+        return 'q', 11
+
     for key, name, sc, types in dm_simple_names:
         for t in types:
             if comparer(t):
