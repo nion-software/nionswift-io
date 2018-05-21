@@ -13,8 +13,10 @@
 # from .parse_dm3 import *
 
 import copy
+import datetime
 import numpy
 
+from nion.data import Calibration
 from nion.data import DataAndMetadata
 
 from . import parse_dm3
@@ -28,6 +30,13 @@ long_type = int
 
 def str_to_utf16_bytes(s):
     return s.encode('utf-16')
+
+def get_datetime_from_timestamp_str(timestamp_str):
+    if len(timestamp_str) in (23, 26):
+        return datetime.datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%S.%f")
+    elif len(timestamp_str) == 19:
+        return datetime.datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%S")
+    return None
 
 structarray_to_np_map = {
     ('d', 'd'): numpy.complex128,
@@ -133,25 +142,26 @@ def ndarray_to_imagedatadict(nparr):
 
 
 def display_keys(tag, indent=None):
+    import logging
     indent = indent if indent is not None else str()
     if isinstance(tag, list) or isinstance(tag, tuple):
         for i, v in enumerate(tag):
-            print("{0} {1}:".format(indent, i))
+            logging.info("{0} {1}:".format(indent, i))
             display_keys(v, indent + "..")
     elif isinstance(tag, dict):
         for k, v in iter(tag.items()):
-            print("{0} key: {1}".format(indent, k))
+            logging.info("{0} key: {1}".format(indent, k))
             display_keys(v, indent + "..")
     elif isinstance(tag, bool):
-        print("{0} bool: {1}".format(indent, tag))
+        logging.info("{0} bool: {1}".format(indent, tag))
     elif isinstance(tag, int):
-        print("{0} int: {1}".format(indent, tag))
+        logging.info("{0} int: {1}".format(indent, tag))
     elif isinstance(tag, float):
-        print("{0} float: {1}".format(indent, tag))
+        logging.info("{0} float: {1}".format(indent, tag))
     elif isinstance(tag, str):
-        print("{0} string: {1}".format(indent, tag))
+        logging.info("{0} string: {1}".format(indent, tag))
     else:
-        print("{0} {1}: DATA".format(indent, type(tag)))
+        logging.info("{0} {1}: DATA".format(indent, type(tag)))
 
 
 def fix_strings(d):
@@ -176,7 +186,7 @@ def fix_strings(d):
     else:
         return d
 
-def load_image(file):
+def load_image(file) -> DataAndMetadata.DataAndMetadata:
     """
     Loads the image from the file-like object or string file.
     If file is a string, the file is opened and then read.
@@ -209,26 +219,50 @@ def load_image(file):
     brightness = calibration_tags.get('Brightness', dict())
     origin, scale, units = brightness.get('Origin', 0.0), brightness.get('Scale', 1.0), brightness.get('Units', str())
     intensity = -origin * scale, scale, units
+    timestamp = None
+    timezone = None
+    timezone_offset = None
     title = image_tags.get('Name')
     properties = dict()
     if 'ImageTags' in image_tags:
-        properties.update(image_tags['ImageTags'])
         voltage = image_tags['ImageTags'].get('ImageScanned', dict()).get('EHT', dict())
         if voltage:
             properties.setdefault("hardware_source", dict())["autostem"] = { "high_tension_v": float(voltage) }
         dm_metadata_signal = image_tags['ImageTags'].get('Meta Data', dict()).get('Signal')
         if dm_metadata_signal and dm_metadata_signal.lower() == "eels":
             properties.setdefault("hardware_source", dict())["signal_type"] = dm_metadata_signal
-        if image_tags['ImageTags'].get('Meta Data', dict()).get('Format') == "Spectrum":
+        if image_tags['ImageTags'].get('Meta Data', dict()).get("Format") == "Spectrum":
             data_descriptor.collection_dimension_count += data_descriptor.datum_dimension_count - 1
             data_descriptor.datum_dimension_count = 1
-        if image_tags['ImageTags'].get('Meta Data', dict()).get('IsSequence', False) and data_descriptor.collection_dimension_count > 0:
+        if image_tags['ImageTags'].get('Meta Data', dict()).get("IsSequence", False) and data_descriptor.collection_dimension_count > 0:
             data_descriptor.is_sequence = True
             data_descriptor.collection_dimension_count -= 1
-    return data, data_descriptor, tuple(calibrations), intensity, title, properties
+        timestamp_str = image_tags['ImageTags'].get("Timestamp")
+        if timestamp_str:
+            timestamp = get_datetime_from_timestamp_str(timestamp_str)
+        timezone = image_tags['ImageTags'].get("Timezone")
+        timezone_offset = image_tags['ImageTags'].get("TimezoneOffset")
+        # to avoid having duplicate copies in Swift, get rid of these tags
+        image_tags['ImageTags'].pop("Timestamp", None)
+        image_tags['ImageTags'].pop("Timezone", None)
+        image_tags['ImageTags'].pop("TimezoneOffset", None)
+        # put the image tags into properties
+        properties.update(image_tags['ImageTags'])
+    dimensional_calibrations = [Calibration.Calibration(c[0], c[1], c[2]) for c in calibrations]
+    while len(dimensional_calibrations) < data_descriptor.expected_dimension_count:
+        dimensional_calibrations.append(Calibration.Calibration())
+    intensity_calibration = Calibration.Calibration(intensity[0], intensity[1], intensity[2])
+    return DataAndMetadata.new_data_and_metadata(data,
+                                                 data_descriptor=data_descriptor,
+                                                 dimensional_calibrations=dimensional_calibrations,
+                                                 intensity_calibration=intensity_calibration,
+                                                 metadata=properties,
+                                                 timestamp=timestamp,
+                                                 timezone=timezone,
+                                                 timezone_offset=timezone_offset)
 
 
-def save_image(data, data_descriptor, dimensional_calibrations, intensity_calibration, metadata, modified, timezone, timezone_offset, file):
+def save_image(xdata: DataAndMetadata.DataAndMetadata, file):
     """
     Saves the nparray data to the file-like object (or string) file.
     """
@@ -236,6 +270,16 @@ def save_image(data, data_descriptor, dimensional_calibrations, intensity_calibr
     # we'll try the minimum: just an data list
     # doesn't work. Do we need a ImageSourceList too?
     # and a DocumentObjectList?
+
+    data = xdata.data
+    data_descriptor = xdata.data_descriptor
+    dimensional_calibrations = xdata.dimensional_calibrations
+    intensity_calibration = xdata.intensity_calibration
+    metadata = xdata.metadata
+    modified = xdata.timestamp
+    timezone = xdata.timezone
+    timezone_offset = xdata.timezone_offset
+
     if len(data.shape) == 3 and data.dtype != numpy.uint8:
         data = numpy.moveaxis(data, 2, 0)
         dimensional_calibrations = (dimensional_calibrations[2],) + tuple(dimensional_calibrations[0:2])
@@ -295,6 +339,12 @@ def save_image(data, data_descriptor, dimensional_calibrations, intensity_calibr
         dm_metadata.setdefault("Meta Data", dict())["Format"] = "Spectrum"
     if data_descriptor.is_sequence:
         dm_metadata.setdefault("Meta Data", dict())["IsSequence"] = True
+    if modified:
+        dm_metadata["Timestamp"] = modified.isoformat()
+    if timezone:
+        dm_metadata["Timezone"] = timezone
+    if timezone_offset:
+        dm_metadata["TimezoneOffset"] = timezone_offset
     ret["ImageList"][0]["ImageTags"] = dm_metadata
     ret["InImageMode"] = 1
     parse_dm3.parse_dm_header(file, ret)
