@@ -6,4 +6,5 @@
 -e git://github.com/nion-software/nionutils.git#egg=nionutils
 -e git://github.com/nion-software/niondata.git#egg=niondata
 
+h5py
 numpy
