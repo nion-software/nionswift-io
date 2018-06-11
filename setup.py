@@ -14,6 +14,7 @@ setuptools.setup(
     author="Nion Software",
     author_email="swift@nion.com",
     description="IO handlers for NionSwift.",
+    long_description=open("README.rst").read(),
     url="https://github.com/nion-software/nionswift-io",
     packages=["nionswift_plugin.DM_IO", "nionswift_plugin.DM_IO.test", "nionswift_plugin.TIFF_IO", "nionswift_plugin.TIFF_IO.test"],
     install_requires=["niondata>=0.13.1"],
