@@ -135,9 +135,9 @@ def ndarray_to_imagedatadict(nparr):
         if nparr.dtype.type in np_to_structarray_map:
             types = np_to_structarray_map[nparr.dtype.type]
             ret["Data"] = parse_dm3.structarray(types)
-            ret["Data"].raw_data = bytes(nparr.data)
+            ret["Data"].raw_data = bytes(numpy.array(nparr, copy=False).data)
         else:
-            ret["Data"] = parse_dm3.array.array(platform_independent_char(nparr.dtype), nparr.flatten())
+            ret["Data"] = parse_dm3.array.array(platform_independent_char(nparr.dtype), numpy.array(nparr, copy=False).flatten())
     return ret
 
 
@@ -212,6 +212,9 @@ def load_image(file) -> DataAndMetadata.DataAndMetadata:
         data = numpy.moveaxis(data, 0, 2)
         data_descriptor = DataAndMetadata.DataDescriptor(False, 1, 2)
         calibrations = tuple(calibrations[1:]) + (calibrations[0],)
+    elif len(data.shape) == 4 and data.dtype != numpy.uint8:
+        # data = numpy.moveaxis(data, 0, 2)
+        data_descriptor = DataAndMetadata.DataDescriptor(False, 2, 2)
     elif data.dtype == numpy.uint8:
         data_descriptor = DataAndMetadata.DataDescriptor(False, 0, len(data.shape[:-1]))
     else:

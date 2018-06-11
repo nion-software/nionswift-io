@@ -10,8 +10,10 @@ import datetime
 import io
 import logging
 import unittest
+import shutil
 import sys
 
+import h5py
 import numpy
 
 from nionswift_plugin.DM_IO import parse_dm3
@@ -110,6 +112,35 @@ class TestDM3ImportExportClass(unittest.TestCase):
         self.assertTrue((im_tag["Data"] == ret["Data"]))
 
     def test_data_write_read_round_trip(self):
+        def db_make_directory_if_needed(directory_path):
+            if os.path.exists(directory_path):
+                if not os.path.isdir(directory_path):
+                    raise OSError("Path is not a directory:", directory_path)
+            else:
+                os.makedirs(directory_path)
+
+        class numpy_array_type:
+            def __init__(self, shape, dtype):
+                self.data = numpy.ones(shape, dtype)
+            def __enter__(self):
+                return self
+            def __exit__(self, exc_type, exc_value, traceback):
+                pass
+
+        class h5py_array_type:
+            def __init__(self, shape, dtype):
+                current_working_directory = os.getcwd()
+                self.__workspace_dir = os.path.join(current_working_directory, "__Test")
+                db_make_directory_if_needed(self.__workspace_dir)
+                self.f = h5py.File(os.path.join(self.__workspace_dir, "file.h5"))
+                self.data = self.f.create_dataset("data", data=numpy.ones(shape, dtype))
+            def __enter__(self):
+                return self
+            def __exit__(self, exc_type, exc_value, traceback):
+                self.f.close()
+                shutil.rmtree(self.__workspace_dir)
+
+        array_types = numpy_array_type, h5py_array_type
         dtypes = (numpy.float32, numpy.float64, numpy.complex64, numpy.complex128, numpy.int16, numpy.uint16, numpy.int32, numpy.uint32)
         shape_data_descriptors = (
             ((6,), DataAndMetadata.DataDescriptor(False, 0, 1)),        # spectrum
@@ -118,26 +149,28 @@ class TestDM3ImportExportClass(unittest.TestCase):
             ((6, 4), DataAndMetadata.DataDescriptor(True, 0, 1)),       # sequence of spectra
             ((6, 4), DataAndMetadata.DataDescriptor(False, 0, 2)),      # image
             ((6, 4, 2), DataAndMetadata.DataDescriptor(False, 1, 2)),   # 1d collection of images
-            # ((6, 4, 2), DataAndMetadata.DataDescriptor(False, 2, 2)),   # 2d collection of images. not possible?
+            ((6, 5, 4, 2), DataAndMetadata.DataDescriptor(False, 2, 2)),   # 2d collection of images. not possible?
             ((6, 8, 10), DataAndMetadata.DataDescriptor(True, 0, 2)),   # sequence of images
         )
-        for dtype in dtypes:
-            for shape, data_descriptor_in in shape_data_descriptors:
-                s = io.BytesIO()
-                data_in = numpy.ones(shape, dtype)
-                dimensional_calibrations_in = list()
-                for index, dimension in enumerate(shape):
-                    dimensional_calibrations_in.append(Calibration.Calibration(1.0 + 0.1 * index, 2.0 + 0.2 * index, "µ" + "n" * index))
-                intensity_calibration_in = Calibration.Calibration(4, 5, "six")
-                metadata_in = dict()
-                xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
-                dm3_image_utils.save_image(xdata_in, s)
-                s.seek(0)
-                xdata = dm3_image_utils.load_image(s)
-                self.assertTrue(numpy.array_equal(data_in, xdata.data))
-                self.assertEqual(data_descriptor_in, xdata.data_descriptor)
-                self.assertEqual(dimensional_calibrations_in, xdata.dimensional_calibrations)
-                self.assertEqual(intensity_calibration_in, xdata.intensity_calibration)
+        for array_type in array_types:
+            for dtype in dtypes:
+                for shape, data_descriptor_in in shape_data_descriptors:
+                    s = io.BytesIO()
+                    with array_type(shape, dtype) as a:
+                        data_in = a.data
+                        dimensional_calibrations_in = list()
+                        for index, dimension in enumerate(shape):
+                            dimensional_calibrations_in.append(Calibration.Calibration(1.0 + 0.1 * index, 2.0 + 0.2 * index, "µ" + "n" * index))
+                        intensity_calibration_in = Calibration.Calibration(4, 5, "six")
+                        metadata_in = dict()
+                        xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
+                        dm3_image_utils.save_image(xdata_in, s)
+                        s.seek(0)
+                        xdata = dm3_image_utils.load_image(s)
+                        self.assertTrue(numpy.array_equal(data_in, xdata.data))
+                        self.assertEqual(data_descriptor_in, xdata.data_descriptor)
+                        self.assertEqual(dimensional_calibrations_in, xdata.dimensional_calibrations)
+                        self.assertEqual(intensity_calibration_in, xdata.intensity_calibration)
 
     def test_rgb_data_write_read_round_trip(self):
         s = io.BytesIO()

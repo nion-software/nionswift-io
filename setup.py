@@ -17,6 +17,7 @@ setuptools.setup(
     url="https://github.com/nion-software/nionswift-io",
     packages=["nionswift_plugin.DM_IO", "nionswift_plugin.DM_IO.test", "nionswift_plugin.TIFF_IO", "nionswift_plugin.TIFF_IO.test"],
     install_requires=["niondata>=0.13.1"],
+    tests_require=["h5py"],
     license='Apache 2.0',
     classifiers=[
         "Development Status :: 2 - Pre-Alpha",
