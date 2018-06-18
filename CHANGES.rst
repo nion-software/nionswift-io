@@ -1,10 +1,10 @@
 Changelog (niondata)
 ====================
 
-UNRELEASED
-----------
+0.13.6 (2018-06-18)
+-------------------
 
-- Improve support for exporting large format data items to DM file format.
+- Improve support for exporting large format (HDF5) data items to DM file format.
 
 0.13.5 (2018-05-21)
 -------------------
