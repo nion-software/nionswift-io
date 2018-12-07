@@ -234,7 +234,7 @@ def load_image(file) -> DataAndMetadata.DataAndMetadata:
         dm_metadata_signal = image_tags['ImageTags'].get('Meta Data', dict()).get('Signal')
         if dm_metadata_signal and dm_metadata_signal.lower() == "eels":
             properties.setdefault("hardware_source", dict())["signal_type"] = dm_metadata_signal
-        if image_tags['ImageTags'].get('Meta Data', dict()).get("Format") == "Spectrum":
+        if image_tags['ImageTags'].get('Meta Data', dict()).get("Format", str()).lower() in ("spectrum", "spectrum image"):
             data_descriptor.collection_dimension_count += data_descriptor.datum_dimension_count - 1
             data_descriptor.datum_dimension_count = 1
         if image_tags['ImageTags'].get('Meta Data', dict()).get("IsSequence", False) and data_descriptor.collection_dimension_count > 0:
@@ -338,6 +338,9 @@ def save_image(xdata: DataAndMetadata.DataAndMetadata, file):
         if len(data.shape) == 1 or (len(data.shape) == 2 and data.shape[0] == 1):
             dm_metadata.setdefault("Meta Data", dict())["Format"] = "Spectrum"
             dm_metadata.setdefault("Meta Data", dict())["Signal"] = "EELS"
+    elif data_descriptor.collection_dimension_count == 2 and data_descriptor.datum_dimension_count == 1:
+        dm_metadata.setdefault("Meta Data", dict())["Format"] = "Spectrum image"
+        dm_metadata.setdefault("Meta Data", dict())["Signal"] = "EELS"
     elif data_descriptor.datum_dimension_count == 1:
         dm_metadata.setdefault("Meta Data", dict())["Format"] = "Spectrum"
     if data_descriptor.is_sequence:
