@@ -1,7 +1,7 @@
 Changelog (nionswift-io)
 ========================
 
-0.13.7 (UNRELEASED)
+0.13.7 (2018-12-11)
 -------------------
 
 - Improve treatment of spectrum images when exporting/import to DM file.
