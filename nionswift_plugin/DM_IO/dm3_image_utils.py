@@ -192,9 +192,15 @@ def load_image(file) -> DataAndMetadata.DataAndMetadata:
     calibrations = tuple(reversed(calibrations))
     if len(data.shape) == 3 and data.dtype != numpy.uint8:
         if image_tags['ImageTags'].get('Meta Data', dict()).get("Format", str()).lower() in ("spectrum", "spectrum image"):
-            data = numpy.moveaxis(data, 0, 2)
-            data_descriptor = DataAndMetadata.DataDescriptor(False, 2, 1)
-            calibrations = tuple(calibrations[1:]) + (calibrations[0],)
+            if data.shape[1] == 1:
+                data = numpy.squeeze(data, 1)
+                data = numpy.moveaxis(data, 0, 1)
+                data_descriptor = DataAndMetadata.DataDescriptor(False, 1, 1)
+                calibrations = (calibrations[2], calibrations[0])
+            else:
+                data = numpy.moveaxis(data, 0, 2)
+                data_descriptor = DataAndMetadata.DataDescriptor(False, 2, 1)
+                calibrations = tuple(calibrations[1:]) + (calibrations[0],)
         else:
             data_descriptor = DataAndMetadata.DataDescriptor(False, 1, 2)
     elif len(data.shape) == 4 and data.dtype != numpy.uint8:
@@ -267,10 +273,19 @@ def save_image(xdata: DataAndMetadata.DataAndMetadata, file):
     modified = xdata.timestamp
     timezone = xdata.timezone
     timezone_offset = xdata.timezone_offset
+    needs_slice = False
+    is_sequence = False
 
     if len(data.shape) == 3 and data.dtype != numpy.uint8 and data_descriptor.datum_dimension_count == 1:
         data = numpy.moveaxis(data, 2, 0)
         dimensional_calibrations = (dimensional_calibrations[2],) + tuple(dimensional_calibrations[0:2])
+    if len(data.shape) == 2 and data.dtype != numpy.uint8 and data_descriptor.datum_dimension_count == 1:
+        is_sequence = data_descriptor.is_sequence
+        data = numpy.moveaxis(data, 1, 0)
+        data = numpy.expand_dims(data, axis=1)
+        dimensional_calibrations = (dimensional_calibrations[1], Calibration.Calibration(), dimensional_calibrations[0])
+        data_descriptor = DataAndMetadata.DataDescriptor(False, 2, 1)
+        needs_slice = True
     data_dict = ndarray_to_imagedatadict(data)
     ret = {}
     ret["ImageList"] = [{"ImageData": data_dict}]
@@ -328,10 +343,13 @@ def save_image(xdata: DataAndMetadata.DataAndMetadata, file):
         dm_metadata.setdefault("Meta Data", dict())["Signal"] = "EELS"
     elif data_descriptor.datum_dimension_count == 1:
         dm_metadata.setdefault("Meta Data", dict())["Format"] = "Spectrum"
-    if (1 if data_descriptor.is_sequence else 0) + data_descriptor.collection_dimension_count == 1:
-        if data_descriptor.is_sequence:
+    if (1 if data_descriptor.is_sequence else 0) + data_descriptor.collection_dimension_count == 1 or needs_slice:
+        if data_descriptor.is_sequence or is_sequence:
             dm_metadata.setdefault("Meta Data", dict())["IsSequence"] = True
         ret["ImageSourceList"] = [{"ClassName": "ImageSource:Summed", "Do Sum": True, "Id": [0], "ImageRef": 0, "LayerEnd": 0, "LayerStart": 0, "Summed Dimension": len(data.shape) - 1}]
+        if needs_slice:
+            ret["DocumentObjectList"][0]["AnnotationGroupList"] = [{"AnnotationType": 23, "Name": "SICursor", "Rectangle": (0, 0, 1, 1)}]
+            ret["DocumentObjectList"][0]["ImageDisplayType"] = 1  # display as an image
     if modified:
         dm_metadata["Timestamp"] = modified.isoformat()
     if timezone:
