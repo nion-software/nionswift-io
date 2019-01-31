@@ -297,6 +297,7 @@ def parse_dm_tag_data(f, outdata=None):
 # mfm 2013-11-15 looks like there's two new (or reinstated) types in DM4, 11 and 12.
 # Guessing what they are here
 dm_simple_names = [
+    (8, "bool", "b", [bool]),
     (2, "short", "h", []),
     (3, "long", "i", [int]),
     # (3, "int", "l", [int]),
@@ -305,7 +306,6 @@ dm_simple_names = [
     # (5, "ulong", "L", [long]),
     (6, "float", "f", []),
     (7, "double", "d", [float]),
-    (8, "bool", "b", [bool]),
     (9, "char", "b", []),
     (10, "octet", "b", []),
     (11, "int64", "q", []),
@@ -413,7 +413,7 @@ for key, name, sc, types in dm_simple_names:
 
 
 def dm_read_bool(f, outdata=None):
-    if outdata:  # this means we're WRITING to the file
+    if outdata is not None:  # this means we're WRITING to the file
         if verbose:
             print("dm_write_bool start", f.tell())
         put_into_file(f, "<b", 1 if outdata else 0)

@@ -14,19 +14,15 @@
 
 import copy
 import datetime
+import pprint
 import numpy
+import typing
 
 from nion.data import Calibration
 from nion.data import DataAndMetadata
 
 from . import parse_dm3
 
-def u(x=None):
-    return str(x if x is not None else str())
-
-unicode_type = str
-
-long_type = int
 
 def str_to_utf16_bytes(s):
     return s.encode('utf-16')
@@ -141,27 +137,13 @@ def ndarray_to_imagedatadict(nparr):
     return ret
 
 
-def display_keys(tag, indent=None):
-    import logging
-    indent = indent if indent is not None else str()
-    if isinstance(tag, list) or isinstance(tag, tuple):
-        for i, v in enumerate(tag):
-            logging.info("{0} {1}:".format(indent, i))
-            display_keys(v, indent + "..")
-    elif isinstance(tag, dict):
-        for k, v in iter(tag.items()):
-            logging.info("{0} key: {1}".format(indent, k))
-            display_keys(v, indent + "..")
-    elif isinstance(tag, bool):
-        logging.info("{0} bool: {1}".format(indent, tag))
-    elif isinstance(tag, int):
-        logging.info("{0} int: {1}".format(indent, tag))
-    elif isinstance(tag, float):
-        logging.info("{0} float: {1}".format(indent, tag))
-    elif isinstance(tag, str):
-        logging.info("{0} string: {1}".format(indent, tag))
-    else:
-        logging.info("{0} {1}: DATA".format(indent, type(tag)))
+def display_keys(tag: typing.Dict) -> None:
+    tag_copy = copy.deepcopy(tag)
+    for image_data in tag_copy.get("ImageList", list()):
+        image_data.get("ImageData", dict()).pop("Data", None)
+    tag_copy.pop("Page Behavior", None)
+    tag_copy.pop("PageSetup", None)
+    pprint.pprint(tag_copy)
 
 
 def fix_strings(d):
@@ -193,12 +175,12 @@ def load_image(file) -> DataAndMetadata.DataAndMetadata:
     Returns a numpy ndarray of our best guess for the most important image
     in the file.
     """
-    if isinstance(file, str) or isinstance(file, unicode_type):
+    if isinstance(file, str) or isinstance(file, str):
         with open(file, "rb") as f:
             return load_image(f)
     dmtag = parse_dm3.parse_dm_header(file)
     dmtag = fix_strings(dmtag)
-    #display_keys(dmtag)
+    # display_keys(dmtag)
     img_index = -1
     image_tags = dmtag['ImageList'][img_index]
     data = imagedatadict_to_ndarray(image_tags['ImageData'])
@@ -209,9 +191,12 @@ def load_image(file) -> DataAndMetadata.DataAndMetadata:
         calibrations.append((-origin * scale, scale, units))
     calibrations = tuple(reversed(calibrations))
     if len(data.shape) == 3 and data.dtype != numpy.uint8:
-        data = numpy.moveaxis(data, 0, 2)
-        data_descriptor = DataAndMetadata.DataDescriptor(False, 1, 2)
-        calibrations = tuple(calibrations[1:]) + (calibrations[0],)
+        if image_tags['ImageTags'].get('Meta Data', dict()).get("Format", str()).lower() in ("spectrum", "spectrum image"):
+            data = numpy.moveaxis(data, 0, 2)
+            data_descriptor = DataAndMetadata.DataDescriptor(False, 2, 1)
+            calibrations = tuple(calibrations[1:]) + (calibrations[0],)
+        else:
+            data_descriptor = DataAndMetadata.DataDescriptor(False, 1, 2)
     elif len(data.shape) == 4 and data.dtype != numpy.uint8:
         # data = numpy.moveaxis(data, 0, 2)
         data_descriptor = DataAndMetadata.DataDescriptor(False, 2, 2)
@@ -283,7 +268,7 @@ def save_image(xdata: DataAndMetadata.DataAndMetadata, file):
     timezone = xdata.timezone
     timezone_offset = xdata.timezone_offset
 
-    if len(data.shape) == 3 and data.dtype != numpy.uint8:
+    if len(data.shape) == 3 and data.dtype != numpy.uint8 and data_descriptor.datum_dimension_count == 1:
         data = numpy.moveaxis(data, 2, 0)
         dimensional_calibrations = (dimensional_calibrations[2],) + tuple(dimensional_calibrations[0:2])
     data_dict = ndarray_to_imagedatadict(data)
@@ -299,7 +284,7 @@ def save_image(xdata: DataAndMetadata.DataAndMetadata, file):
                 origin = 0.0
             dimension['Origin'] = origin
             dimension['Scale'] = dimensional_calibration.scale
-            dimension['Units'] = u(dimensional_calibration.units)
+            dimension['Units'] = dimensional_calibration.units
             dimension_list.append(dimension)
     if intensity_calibration:
         if intensity_calibration.scale != 0.0:
@@ -309,7 +294,7 @@ def save_image(xdata: DataAndMetadata.DataAndMetadata, file):
         brightness = data_dict.setdefault("Calibrations", dict()).setdefault("Brightness", dict())
         brightness['Origin'] = origin
         brightness['Scale'] = intensity_calibration.scale
-        brightness['Units'] = str(intensity_calibration.units)
+        brightness['Units'] = intensity_calibration.units
     if modified:
         timezone_str = None
         if timezone_str is None and timezone:
@@ -343,8 +328,10 @@ def save_image(xdata: DataAndMetadata.DataAndMetadata, file):
         dm_metadata.setdefault("Meta Data", dict())["Signal"] = "EELS"
     elif data_descriptor.datum_dimension_count == 1:
         dm_metadata.setdefault("Meta Data", dict())["Format"] = "Spectrum"
-    if data_descriptor.is_sequence:
-        dm_metadata.setdefault("Meta Data", dict())["IsSequence"] = True
+    if (1 if data_descriptor.is_sequence else 0) + data_descriptor.collection_dimension_count == 1:
+        if data_descriptor.is_sequence:
+            dm_metadata.setdefault("Meta Data", dict())["IsSequence"] = True
+        ret["ImageSourceList"] = [{"ClassName": "ImageSource:Summed", "Do Sum": True, "Id": [0], "ImageRef": 0, "LayerEnd": 0, "LayerStart": 0, "Summed Dimension": len(data.shape) - 1}]
     if modified:
         dm_metadata["Timestamp"] = modified.isoformat()
     if timezone:
@@ -352,7 +339,7 @@ def save_image(xdata: DataAndMetadata.DataAndMetadata, file):
     if timezone_offset:
         dm_metadata["TimezoneOffset"] = timezone_offset
     ret["ImageList"][0]["ImageTags"] = dm_metadata
-    ret["InImageMode"] = 1
+    ret["InImageMode"] = True
     parse_dm3.parse_dm_header(file, ret)
 
 
