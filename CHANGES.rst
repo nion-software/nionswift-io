@@ -1,7 +1,7 @@
 Changelog (nionswift-io)
 ========================
 
-0.13.8 (UNRELEASED)
+0.13.8 (2019-01-31)
 -------------------
 
 - Improve treatment of 1D collections/sequences of spectra/images when exporting/import to DM file.

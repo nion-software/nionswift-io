@@ -10,7 +10,7 @@ import os
 
 setuptools.setup(
     name="nionswift-io",
-    version="0.13.7",
+    version="0.13.8",
     author="Nion Software",
     author_email="swift@nion.com",
     description="IO handlers for NionSwift.",
@@ -22,8 +22,8 @@ setuptools.setup(
     license='Apache 2.0',
     classifiers=[
         "Development Status :: 2 - Pre-Alpha",
-        "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3.6",
     ],
     include_package_data=True,
-    python_requires='~=3.5',
+    python_requires='~=3.6',
 )
