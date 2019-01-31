@@ -9,6 +9,7 @@ import array
 import datetime
 import io
 import logging
+import pkgutil
 import unittest
 import shutil
 import sys
@@ -272,6 +273,52 @@ class TestDM3ImportExportClass(unittest.TestCase):
         xdata = dm3_image_utils.load_image(s)
         metadata_expected = {'hardware_source': {'signal_type': 'EELS'}, 'Meta Data': {'Format': 'Spectrum', 'Signal': 'EELS'}}
         self.assertEqual(metadata_expected, xdata.metadata)
+
+    def test_reference_images_load_properly(self):
+        shape_data_descriptors = (
+            ((3,), DataAndMetadata.DataDescriptor(False, 0, 1)),        # spectrum
+            ((3, 2), DataAndMetadata.DataDescriptor(False, 1, 1)),      # 1d collection of spectra
+            ((3, 4, 5), DataAndMetadata.DataDescriptor(False, 2, 1)),   # 2d collection of spectra
+            ((3, 2), DataAndMetadata.DataDescriptor(True, 0, 1)),       # sequence of spectra
+            ((3, 2), DataAndMetadata.DataDescriptor(False, 0, 2)),      # image
+            ((4, 3, 2), DataAndMetadata.DataDescriptor(False, 1, 2)),   # 1d collection of images
+            ((3, 4, 5), DataAndMetadata.DataDescriptor(True, 0, 2)),    # sequence of images
+        )
+        for shape, data_descriptor in shape_data_descriptors:
+            dimensional_calibrations = list()
+            for index, dimension in enumerate(shape):
+                dimensional_calibrations.append(Calibration.Calibration(1.0 + 0.1 * index, 2.0 + 0.2 * index, "µ" + "n" * index))
+            intensity_calibration = Calibration.Calibration(4, 5, "six")
+            data = numpy.arange(numpy.product(shape), dtype=numpy.float32).reshape(shape)
+
+            name = f"ref_{'T' if data_descriptor.is_sequence else 'F'}_{data_descriptor.collection_dimension_count}_{data_descriptor.datum_dimension_count}.dm3"
+
+            # import pathlib
+            # xdata = DataAndMetadata.new_data_and_metadata(data, dimensional_calibrations=dimensional_calibrations, intensity_calibration=intensity_calibration, data_descriptor=data_descriptor)
+            # file_path = pathlib.Path(__file__).parent / "resources" / name
+            # with file_path.open('wb') as f:
+            #     dm3_image_utils.save_image(xdata, f)
+
+            try:
+                s = io.BytesIO(pkgutil.get_data(__name__, f"resources/{name}"))
+                xdata = dm3_image_utils.load_image(s)
+                self.assertEqual(intensity_calibration, xdata.intensity_calibration)
+                self.assertEqual(dimensional_calibrations, xdata.dimensional_calibrations)
+                self.assertEqual(data_descriptor, xdata.data_descriptor)
+                self.assertTrue(numpy.array_equal(data, xdata.data))
+                # print(f"{name} {data_descriptor} PASS")
+            except Exception as e:
+                print(f"{name} {data_descriptor} FAIL")
+                raise
+
+    def disabled_test_specific_file(self):
+        file_path = "/path/to/test.dm3"
+        xdata = dm3_image_utils.load_image(file_path)
+
+        # file_path = "/path/to/test-new.dm3"
+        # with open(file_path, "wb") as f:
+        #     dm3_image_utils.save_image(xdata, f)
+
 
 # some functions for processing multiple files.
 # useful for testing reading and writing a large number of files.
