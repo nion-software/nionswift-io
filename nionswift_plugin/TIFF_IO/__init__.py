@@ -53,14 +53,17 @@ class TIFFIODelegateBase:
             # Non-imagej compatible tifs are written (by tifffile.py) into multiple pages if they have more than 2 dimensions
             # There is also a 'shape' attribute that describes the original shape for those files. This information could be used
             # to properly load these files as well. However, right now, only the first page will be loaded and imported.
+            # 2019/04/15 new tifffile version also seems to put imagej tiff stacks into multiple pages. Reworked import
+            # so that it works for now and added tests that should fail if tifffile behavior changes again.
             tiffpage = tiffimage.pages[0]
+            tiffpageseries = tiffimage.series[0]
             # Try if image is imagej type
             if tiffimage.is_imagej:
-                if tiffpage.tags.get('x_resolution') is not None:
-                    x_resolution = tiffpage.tags['x_resolution'].value
+                if tiffpage.tags.get('XResolution') is not None:
+                    x_resolution = tiffpage.tags['XResolution'].value
                     x_resolution = x_resolution[0] / x_resolution[1]
-                if tiffpage.tags.get('y_resolution') is not None:
-                    y_resolution = tiffpage.tags['y_resolution'].value
+                if tiffpage.tags.get('YResolution') is not None:
+                    y_resolution = tiffpage.tags['YResolution'].value
                     y_resolution = y_resolution[0] / y_resolution[1]
                 if tiffimage.imagej_metadata.get(NION_TAG) is not None:
                     data_element_dict = json.loads(tiffimage.imagej_metadata[NION_TAG])
@@ -93,7 +96,7 @@ class TIFFIODelegateBase:
                                               data_element_dict.get('datum_dimension_count', 1) +
                                               int(data_element_dict.get('is_sequence', False)))
 
-            data = tiffpage.asarray()
+            data = tiffpageseries.asarray()
 
             # check and adapt for rgb(a) data
             # last data axis depends on whether data is rgb(a)
@@ -106,40 +109,55 @@ class TIFFIODelegateBase:
                     expected_number_dimensions += 1
                 last_data_axis = -2
                 if data.shape[-1] == 3:
-                    data = data[...,(2, 1, 0)]
+                    data = data[..., (2, 1, 0)]
                 if data.shape[-1] == 4:
-                    data = data[...,(2, 1, 0, 3)]
+                    data = data[..., (2, 1, 0, 3)]
                 # only supports 8-bit color images for now
                 data = data.astype(numpy.uint8)
 
+
+            shape = numpy.ones(6, dtype=numpy.int_)
+            imagej_axes = list('TZCYXS')
+            for i in range(len(tiffpageseries.axes)):
+                try:
+                    ind = imagej_axes.index(tiffpageseries.axes[i])
+                    shape[ind] = data.shape[i]
+                except ValueError:
+                    pass
             # if number of axes is wrong or it could not be determined and imagej metadata is there
             # use this information to reshape array
-            if (expected_number_dimensions is None or
-                expected_number_dimensions != len(data.shape)) and (
-                numpy.array([images, channels, slices, frames]).astype('bool').any()):
+            if ((expected_number_dimensions is None or
+                 expected_number_dimensions != len(data.shape)) and
+                numpy.array([images, channels, slices, frames]).any()):
+
                 datum_dimension_count = 1
                 collection_dimension_count = 0
                 is_sequence = False
-                shape = numpy.array(tiffpage._shape)
 
-                if channels is not None:
-                    if shape[2] != channels and shape[0]/channels >= 1:
-                        shape[2] = channels
-                        shape[0] = int(shape[0]/channels)
-                    if slices is not None:
-                        if shape[1] != slices and shape[0]/slices >= 1:
-                            shape[1] = slices
-                            shape[0] = int(shape[0]/slices)
+                shape = numpy.ones(6, dtype=numpy.int_)
+                imagej_axes = list('TZCYXS')
+                for i in range(len(tiffpageseries.axes)):
+                    try:
+                        ind = imagej_axes.index(tiffpageseries.axes[i])
+                        shape[ind] = data.shape[i]
+                    except ValueError:
+                        pass
 
                 if shape[0] > 1:
                     is_sequence = True
-                if shape[1] > 1:
-                    collection_dimension_count += 1
-                if shape[2] > 1:
-                    collection_dimension_count += 1
-                if shape[3] > 1:
-                    datum_dimension_count += 1
-                # data should always be at least 1d, therefore we don't check for x-dimension
+                if shape[1] > 1 or shape[2] > 1:
+                    # if we're here, we have a collection
+                    if shape[3] > 1:
+                        collection_dimension_count += 1
+                    if shape[4] > 1:
+                        collection_dimension_count += 1
+                    if shape[1] > 1:
+                        datum_dimension_count += 1
+                else:
+                    # no collection
+                    if shape[3] > 1:
+                        datum_dimension_count += 1
+                    # data should always be at least 1d, therefore we don't check for x-dimension
 
                 # reshape data if shape estimate was correct
                 if numpy.prod(shape) == data.size:
@@ -154,7 +172,6 @@ class TIFFIODelegateBase:
                 else:
                     print('Could not reshape data with shape {} to estimated shape {}'.format(data.shape,
                                                                                                   tuple(shape)))
-
             # if number of dimensions calculated from metadata matches actual number of dimensions, we assume
             # that the data is still valid for being interpreted by shape descriptors
             if expected_number_dimensions is not None and len(data.shape) == expected_number_dimensions:
@@ -182,7 +199,6 @@ class TIFFIODelegateBase:
         if data_element_dict is not None:
             dimensional_calibrations, intensity_calibration, timestamp, data_descriptor, metadata = (
                                                        self.__create_data_info_objects_from_data_element_dict(data_element_dict))
-
         # remove calibrations if their number is wrong
         if dimensional_calibrations is not None and len(dimensional_calibrations) != len(data_shape):
             dimensional_calibrations = None
@@ -234,9 +250,10 @@ class TIFFIODelegateBase:
                                             scale=(1 / x_resolution) if x_resolution else None,
                                             units=unit)]
                 # If data has more dimensions also append y-resolution
-                dimensional_calibrations.insert(0, self.__api.create_calibration(offset=y_offset,
-                                                   scale=(1 / y_resolution) if y_resolution else None,
-                                                   units=unit))
+                if len(data_shape) > 1:
+                    dimensional_calibrations.insert(0, self.__api.create_calibration(offset=y_offset,
+                                                    scale=(1 / y_resolution) if y_resolution else None,
+                                                    units=unit))
                 # Add "empty" calibrations for remaining axes
                 number_calibrations = len(dimensional_calibrations)
                 for i in range(len(data_shape) - number_calibrations):
@@ -320,6 +337,11 @@ class TIFFIODelegate_ImageJ(TIFFIODelegateBase):
         self.io_handler_id = "tiff-io-handler-imagej"
         self.io_handler_name = _("TIFF Files (ImageJ)")
 
+        # this is needed for automated testing. In reality, if you export data from Swift, import and save it in
+        # imagej, the Swift metadata will be lost. With this flag we can simulate this behavior and make sure
+        # we restore the data correcty even without the Swift metadata.
+        self._include_nion_metadata = True
+
     def can_write_data_and_metadata(self, data_and_metadata, extension) -> bool:
         # return data_and_metadata.is_data_2d or data_and_metadata.is_data_1d or data_and_metadata.is_data_3d
         return len(data_and_metadata.data_shape) < 5
@@ -335,7 +357,8 @@ class TIFFIODelegate_ImageJ(TIFFIODelegateBase):
 
         tifffile_metadata['unit'] = ''
         metadata_dict = self.__extract_data_element_dict_from_data_and_metadata(data_and_metadata)
-        tifffile_metadata[NION_TAG] = json.dumps(metadata_dict)
+        if self._include_nion_metadata: # just there for automated tests, see __init__ for details.
+            tifffile_metadata[NION_TAG] = json.dumps(metadata_dict)
 
         if data is not None:
             data_shape = data.shape
@@ -361,14 +384,19 @@ class TIFFIODelegate_ImageJ(TIFFIODelegateBase):
 
             if data_and_metadata.collection_dimension_count > 0:
                 # if data is a collection, put collection axis in x-and y of tif
-                tifffile_shape[4] = data_shape[0]
+                if data_and_metadata.collection_dimension_count == 1:
+                    # if we have only one collection dimension make it the x-axis
+                    tifffile_shape[4] = data_shape[0]
+
                 # use collection x-calibration as x-calibration in tif
                 resolution = (1 / calibrations[0].scale, ) if calibrations[0].scale != 0 else (1, )
                 # use x-unit in tif (unfortunately there is no way to save separate units for x- and y)
                 unit = calibrations[0].units
                 # if data is a 2d-collection, also fill y-axis of tif
                 if data_and_metadata.collection_dimension_count == 2:
-                    tifffile_shape[3] = data_shape[1]
+                    # for a 2d collection, the x-axis is the second axis
+                    tifffile_shape[4] = data_shape[1]
+                    tifffile_shape[3] = data_shape[0]
                     # add collection y-calibration as y-calibration in tif
                     resolution += (1 / calibrations[1].scale, ) if calibrations[1].scale != 0 else (1, )
                 # for data x-axis use tif "channel" axis

@@ -37,6 +37,86 @@ class TestTIFFIOClass(unittest.TestCase):
             self.assertEqual(xdata_w.data_shape, xdata_r.data_shape)
             self.assertIn(xdata_r.data.dtype, (numpy.uint16, numpy.float32))
 
+    def test_imagej_writes_reads_1d_data_roundtrip(self):
+        api = API()
+        io_delegate = TIFF_IO.TIFFIODelegate_ImageJ(api)
+        for include_swift_metadata in (False, True):
+            io_delegate._include_nion_metadata = include_swift_metadata
+            data = numpy.zeros(16)
+            data_descriptor = api.create_data_descriptor(False, 0, 1)
+            xdata_w = api.create_data_and_metadata(data, data_descriptor=data_descriptor)
+            b = io.BytesIO()
+            io_delegate.write_data_and_metadata_stream(xdata_w, b)
+            b.seek(0)
+            xdata_r = io_delegate.read_data_and_metadata_from_stream(b)
+            self.assertEqual(xdata_w.data_shape, xdata_r.data_shape)
+            self.assertEqual(xdata_w.is_sequence, xdata_r.is_sequence)
+            self.assertEqual(xdata_w.collection_dimension_count, xdata_r.collection_dimension_count)
+
+    def test_imagej_writes_reads_2d_data_roundtrip(self):
+        api = API()
+        io_delegate = TIFF_IO.TIFFIODelegate_ImageJ(api)
+        for include_swift_metadata in (False, True):
+            io_delegate._include_nion_metadata = include_swift_metadata
+            data = numpy.zeros((15, 16))
+            data_descriptor = api.create_data_descriptor(False, 0, 2)
+            xdata_w = api.create_data_and_metadata(data, data_descriptor=data_descriptor)
+            b = io.BytesIO()
+            io_delegate.write_data_and_metadata_stream(xdata_w, b)
+            b.seek(0)
+            xdata_r = io_delegate.read_data_and_metadata_from_stream(b)
+            self.assertEqual(xdata_w.data_shape, xdata_r.data_shape)
+            self.assertEqual(xdata_w.is_sequence, xdata_r.is_sequence)
+            self.assertEqual(xdata_w.collection_dimension_count, xdata_r.collection_dimension_count)
+
+    def test_imagej_writes_reads_sequence_2d_data_roundtrip(self):
+        api = API()
+        io_delegate = TIFF_IO.TIFFIODelegate_ImageJ(api)
+        for include_swift_metadata in (False, True):
+            io_delegate._include_nion_metadata = include_swift_metadata
+            data = numpy.zeros((2, 15, 16))
+            data_descriptor = api.create_data_descriptor(True, 0, 2)
+            xdata_w = api.create_data_and_metadata(data, data_descriptor=data_descriptor)
+            b = io.BytesIO()
+            io_delegate.write_data_and_metadata_stream(xdata_w, b)
+            b.seek(0)
+            xdata_r = io_delegate.read_data_and_metadata_from_stream(b)
+            self.assertEqual(xdata_w.data_shape, xdata_r.data_shape)
+            self.assertEqual(xdata_w.is_sequence, xdata_r.is_sequence)
+            self.assertEqual(xdata_w.collection_dimension_count, xdata_r.collection_dimension_count)
+
+    def test_imagej_writes_reads_2d_collection_1d_data_roundtrip(self):
+        api = API()
+        io_delegate = TIFF_IO.TIFFIODelegate_ImageJ(api)
+        for include_swift_metadata in (False, True):
+            io_delegate._include_nion_metadata = include_swift_metadata
+            data = numpy.zeros((15, 16, 5))
+            data_descriptor = api.create_data_descriptor(False, 2, 1)
+            xdata_w = api.create_data_and_metadata(data, data_descriptor=data_descriptor)
+            b = io.BytesIO()
+            io_delegate.write_data_and_metadata_stream(xdata_w, b)
+            b.seek(0)
+            xdata_r = io_delegate.read_data_and_metadata_from_stream(b)
+            self.assertEqual(xdata_w.data_shape, xdata_r.data_shape)
+            self.assertEqual(xdata_w.is_sequence, xdata_r.is_sequence)
+            self.assertEqual(xdata_w.collection_dimension_count, xdata_r.collection_dimension_count)
+
+    def test_imagej_writes_reads_2d_collection_2d_data_roundtrip(self):
+        api = API()
+        io_delegate = TIFF_IO.TIFFIODelegate_ImageJ(api)
+        for include_swift_metadata in (False, True):
+            io_delegate._include_nion_metadata = include_swift_metadata
+            data = numpy.zeros((5, 6, 15, 16))
+            data_descriptor = api.create_data_descriptor(False, 2, 2)
+            xdata_w = api.create_data_and_metadata(data, data_descriptor=data_descriptor)
+            b = io.BytesIO()
+            io_delegate.write_data_and_metadata_stream(xdata_w, b)
+            b.seek(0)
+            xdata_r = io_delegate.read_data_and_metadata_from_stream(b)
+            self.assertEqual(xdata_w.data_shape, xdata_r.data_shape)
+            self.assertEqual(xdata_w.is_sequence, xdata_r.is_sequence)
+            self.assertEqual(xdata_w.collection_dimension_count, xdata_r.collection_dimension_count)
+
     def test_baseline_produces_proper_data_types(self):
         io_delegate = TIFF_IO.TIFFIODelegate_Baseline(API())
         for t in (numpy.int16, numpy.uint16, numpy.int32, numpy.uint32, numpy.int64, numpy.uint64, numpy.float32, numpy.float64):
