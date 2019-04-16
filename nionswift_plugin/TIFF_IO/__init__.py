@@ -351,6 +351,7 @@ class TIFFIODelegate_ImageJ(TIFFIODelegateBase):
 
     def write_data_and_metadata_stream(self, data_and_metadata, stream) -> None:
         data = data_and_metadata.data
+
         tifffile_metadata = {}
 
         calibrations = data_and_metadata.dimensional_calibrations
@@ -453,7 +454,7 @@ class TIFFIODelegate_ImageJ(TIFFIODelegateBase):
             if unit is not None:
                 tifffile_metadata['unit'] = unit
 
-            data = data.reshape(tuple(tifffile_shape))
+            data = numpy.reshape(data, tuple(tifffile_shape))
 
             # Change dtype if necessary to make tif compatible with imagej
             if not data.dtype in [numpy.float32, numpy.uint8, numpy.uint16]:
