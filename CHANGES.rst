@@ -4,6 +4,8 @@ Changelog (nionswift-io)
 0.13.9 (UNRELEASED)
 -------------------
 
+- Handle large format data items (HDF5 backed) when exporting to TIFF.
+
 - Improve support for multi-dimensional data as available in latest TIFF library.
 
 0.13.8 (2019-01-31)
