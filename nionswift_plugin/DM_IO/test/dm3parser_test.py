@@ -313,7 +313,8 @@ class TestDM3ImportExportClass(unittest.TestCase):
 
     def disabled_test_specific_file(self):
         file_path = "/path/to/test.dm3"
-        xdata = dm3_image_utils.load_image(file_path)
+        with open(file_path, "rb") as f:
+            xdata = dm3_image_utils.load_image(f)
 
         # file_path = "/path/to/test-new.dm3"
         # with open(file_path, "wb") as f:

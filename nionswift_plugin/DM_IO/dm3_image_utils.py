@@ -168,16 +168,13 @@ def fix_strings(d):
     else:
         return d
 
-def load_image(file) -> DataAndMetadata.DataAndMetadata:
+def load_image(file: typing.BinaryIO) -> DataAndMetadata.DataAndMetadata:
     """
     Loads the image from the file-like object or string file.
     If file is a string, the file is opened and then read.
     Returns a numpy ndarray of our best guess for the most important image
     in the file.
     """
-    if isinstance(file, str) or isinstance(file, str):
-        with open(file, "rb") as f:
-            return load_image(f)
     dmtag = parse_dm3.parse_dm_header(file)
     dmtag = fix_strings(dmtag)
     # display_keys(dmtag)
@@ -256,7 +253,7 @@ def load_image(file) -> DataAndMetadata.DataAndMetadata:
                                                  timezone_offset=timezone_offset)
 
 
-def save_image(xdata: DataAndMetadata.DataAndMetadata, file):
+def save_image(xdata: DataAndMetadata.DataAndMetadata, file: typing.BinaryIO) -> None:
     """
     Saves the nparray data to the file-like object (or string) file.
     """

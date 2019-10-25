@@ -24,7 +24,8 @@ class DM3IODelegate(object):
         self.io_handler_extensions = ["dm3", "dm4"]
 
     def read_data_and_metadata(self, extension, file_path):
-        return dm3_image_utils.load_image(file_path)
+        with open(file_path, "rb") as f:
+            return dm3_image_utils.load_image(f)
 
     def can_write_data_and_metadata(self, data_and_metadata, extension):
         return extension == "dm3"
@@ -56,7 +57,8 @@ class DM3IODelegate(object):
 
 
 def load_image(file_path):
-    return dm3_image_utils.load_image(file_path)
+    with open(file_path, "rb") as f:
+        return dm3_image_utils.load_image(f)
 
 
 class DM3IOExtension(object):
