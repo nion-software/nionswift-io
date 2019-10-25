@@ -24,7 +24,7 @@ class DM3IODelegate(object):
         self.io_handler_extensions = ["dm3", "dm4"]
 
     def read_data_and_metadata(self, extension, file_path):
-        with open(file_path, "rb") as f:
+        with open(file_path, "rb", buffering=8 * 1024 * 1024) as f:
             return dm3_image_utils.load_image(f)
 
     def can_write_data_and_metadata(self, data_and_metadata, extension):
@@ -44,7 +44,7 @@ class DM3IODelegate(object):
         timestamp = data_and_metadata.timestamp
         timezone = data_and_metadata.timezone
         timezone_offset = data_and_metadata.timezone_offset
-        with open(file_path, 'wb') as f:
+        with open(file_path, 'wb', buffering=32 * 1024 * 1024) as f:
             xdata = DataAndMetadata.new_data_and_metadata(data,
                                                           data_descriptor=data_descriptor,
                                                           dimensional_calibrations=dimensional_calibrations,
@@ -57,7 +57,7 @@ class DM3IODelegate(object):
 
 
 def load_image(file_path):
-    with open(file_path, "rb") as f:
+    with open(file_path, "rb", buffering=8 * 1024 * 1024) as f:
         return dm3_image_utils.load_image(f)
 
 
