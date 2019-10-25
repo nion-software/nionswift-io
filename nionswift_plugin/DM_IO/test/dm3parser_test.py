@@ -10,6 +10,7 @@ import datetime
 import io
 import logging
 import pkgutil
+import os
 import unittest
 import shutil
 import sys
@@ -153,126 +154,134 @@ class TestDM3ImportExportClass(unittest.TestCase):
             ((6, 5, 4, 2), DataAndMetadata.DataDescriptor(False, 2, 2)),   # 2d collection of images. not possible?
             ((6, 8, 10), DataAndMetadata.DataDescriptor(True, 0, 2)),   # sequence of images
         )
-        for array_type in array_types:
-            for dtype in dtypes:
-                for shape, data_descriptor_in in shape_data_descriptors:
-                    s = io.BytesIO()
-                    with array_type(shape, dtype) as a:
-                        data_in = a.data
-                        dimensional_calibrations_in = list()
-                        for index, dimension in enumerate(shape):
-                            dimensional_calibrations_in.append(Calibration.Calibration(1.0 + 0.1 * index, 2.0 + 0.2 * index, "µ" + "n" * index))
-                        intensity_calibration_in = Calibration.Calibration(4, 5, "six")
-                        metadata_in = dict()
-                        xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
-                        dm3_image_utils.save_image(xdata_in, s)
-                        s.seek(0)
-                        xdata = dm3_image_utils.load_image(s)
-                        self.assertTrue(numpy.array_equal(data_in, xdata.data))
-                        self.assertEqual(data_descriptor_in, xdata.data_descriptor)
-                        self.assertEqual(dimensional_calibrations_in, xdata.dimensional_calibrations)
-                        self.assertEqual(intensity_calibration_in, xdata.intensity_calibration)
+        for version in (3, 4):
+            for array_type in array_types:
+                for dtype in dtypes:
+                    for shape, data_descriptor_in in shape_data_descriptors:
+                        s = io.BytesIO()
+                        with array_type(shape, dtype) as a:
+                            data_in = a.data
+                            dimensional_calibrations_in = list()
+                            for index, dimension in enumerate(shape):
+                                dimensional_calibrations_in.append(Calibration.Calibration(1.0 + 0.1 * index, 2.0 + 0.2 * index, "µ" + "n" * index))
+                            intensity_calibration_in = Calibration.Calibration(4, 5, "six")
+                            metadata_in = dict()
+                            xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
+                            dm3_image_utils.save_image(xdata_in, s, version)
+                            s.seek(0)
+                            xdata = dm3_image_utils.load_image(s)
+                            self.assertTrue(numpy.array_equal(data_in, xdata.data))
+                            self.assertEqual(data_descriptor_in, xdata.data_descriptor)
+                            self.assertEqual(dimensional_calibrations_in, xdata.dimensional_calibrations)
+                            self.assertEqual(intensity_calibration_in, xdata.intensity_calibration)
 
     def test_rgb_data_write_read_round_trip(self):
-        s = io.BytesIO()
-        data_in = (numpy.random.randn(6, 4, 3) * 255).astype(numpy.uint8)
-        data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
-        dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
-        intensity_calibration_in = Calibration.Calibration(4, 5, "six")
-        metadata_in = {"abc": None, "": "", "one": [], "two": {}, "three": [1, None, 2]}
-        xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
-        dm3_image_utils.save_image(xdata_in, s)
-        s.seek(0)
-        xdata = dm3_image_utils.load_image(s)
-        self.assertTrue(numpy.array_equal(data_in, xdata.data))
-        self.assertEqual(data_descriptor_in, xdata.data_descriptor)
+        for version in (3, 4):
+            s = io.BytesIO()
+            data_in = (numpy.random.randn(6, 4, 3) * 255).astype(numpy.uint8)
+            data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
+            dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
+            intensity_calibration_in = Calibration.Calibration(4, 5, "six")
+            metadata_in = {"abc": None, "": "", "one": [], "two": {}, "three": [1, None, 2]}
+            xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
+            dm3_image_utils.save_image(xdata_in, s, version)
+            s.seek(0)
+            xdata = dm3_image_utils.load_image(s)
+            self.assertTrue(numpy.array_equal(data_in, xdata.data))
+            self.assertEqual(data_descriptor_in, xdata.data_descriptor)
 
     def test_calibrations_write_read_round_trip(self):
-        s = io.BytesIO()
-        data_in = numpy.ones((6, 4), numpy.float32)
-        data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
-        dimensional_calibrations_in = [Calibration.Calibration(1.1, 2.1, "nm"), Calibration.Calibration(2, 3, u"µm")]
-        intensity_calibration_in = Calibration.Calibration(4.4, 5.5, "six")
-        metadata_in = dict()
-        xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
-        dm3_image_utils.save_image(xdata_in, s)
-        s.seek(0)
-        xdata = dm3_image_utils.load_image(s)
-        self.assertEqual(dimensional_calibrations_in, xdata.dimensional_calibrations)
-        self.assertEqual(intensity_calibration_in, xdata.intensity_calibration)
+        for version in (3, 4):
+            s = io.BytesIO()
+            data_in = numpy.ones((6, 4), numpy.float32)
+            data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
+            dimensional_calibrations_in = [Calibration.Calibration(1.1, 2.1, "nm"), Calibration.Calibration(2, 3, u"µm")]
+            intensity_calibration_in = Calibration.Calibration(4.4, 5.5, "six")
+            metadata_in = dict()
+            xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
+            dm3_image_utils.save_image(xdata_in, s, version)
+            s.seek(0)
+            xdata = dm3_image_utils.load_image(s)
+            self.assertEqual(dimensional_calibrations_in, xdata.dimensional_calibrations)
+            self.assertEqual(intensity_calibration_in, xdata.intensity_calibration)
 
     def test_data_timestamp_write_read_round_trip(self):
-        s = io.BytesIO()
-        data_in = numpy.ones((6, 4), numpy.float32)
-        data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
-        dimensional_calibrations_in = [Calibration.Calibration(1.1, 2.1, "nm"), Calibration.Calibration(2, 3, u"µm")]
-        intensity_calibration_in = Calibration.Calibration(4.4, 5.5, "six")
-        metadata_in = dict()
-        timestamp_in = datetime.datetime(2013, 11, 18, 14, 5, 4, 0)
-        timezone_in = "America/Los_Angeles"
-        timezone_offset_in = "-0700"
-        xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in, timestamp=timestamp_in, timezone=timezone_in, timezone_offset=timezone_offset_in)
-        dm3_image_utils.save_image(xdata_in, s)
-        s.seek(0)
-        xdata = dm3_image_utils.load_image(s)
-        self.assertEqual(timestamp_in, xdata.timestamp)
-        self.assertEqual(timezone_in, xdata.timezone)
-        self.assertEqual(timezone_offset_in, xdata.timezone_offset)
+        for version in (3, 4):
+            s = io.BytesIO()
+            data_in = numpy.ones((6, 4), numpy.float32)
+            data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
+            dimensional_calibrations_in = [Calibration.Calibration(1.1, 2.1, "nm"), Calibration.Calibration(2, 3, u"µm")]
+            intensity_calibration_in = Calibration.Calibration(4.4, 5.5, "six")
+            metadata_in = dict()
+            timestamp_in = datetime.datetime(2013, 11, 18, 14, 5, 4, 0)
+            timezone_in = "America/Los_Angeles"
+            timezone_offset_in = "-0700"
+            xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in, timestamp=timestamp_in, timezone=timezone_in, timezone_offset=timezone_offset_in)
+            dm3_image_utils.save_image(xdata_in, s, version)
+            s.seek(0)
+            xdata = dm3_image_utils.load_image(s)
+            self.assertEqual(timestamp_in, xdata.timestamp)
+            self.assertEqual(timezone_in, xdata.timezone)
+            self.assertEqual(timezone_offset_in, xdata.timezone_offset)
 
     def test_metadata_write_read_round_trip(self):
-        s = io.BytesIO()
-        data_in = numpy.ones((6, 4), numpy.float32)
-        data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
-        dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
-        intensity_calibration_in = Calibration.Calibration(4, 5, "six")
-        metadata_in = {"abc": 1, "def": "abc", "efg": { "one": 1, "two": "TWO", "three": [3, 4, 5] }}
-        xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
-        dm3_image_utils.save_image(xdata_in, s)
-        s.seek(0)
-        xdata = dm3_image_utils.load_image(s)
-        self.assertEqual(metadata_in, xdata.metadata)
+        for version in (3, 4):
+            s = io.BytesIO()
+            data_in = numpy.ones((6, 4), numpy.float32)
+            data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
+            dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
+            intensity_calibration_in = Calibration.Calibration(4, 5, "six")
+            metadata_in = {"abc": 1, "def": "abc", "efg": { "one": 1, "two": "TWO", "three": [3, 4, 5] }}
+            xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
+            dm3_image_utils.save_image(xdata_in, s, version)
+            s.seek(0)
+            xdata = dm3_image_utils.load_image(s)
+            self.assertEqual(metadata_in, xdata.metadata)
 
     def test_metadata_difficult_types_write_read_round_trip(self):
-        s = io.BytesIO()
-        data_in = numpy.ones((6, 4), numpy.float32)
-        data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
-        dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
-        intensity_calibration_in = Calibration.Calibration(4, 5, "six")
-        metadata_in = {"abc": None, "": "", "one": [], "two": {}, "three": [1, None, 2]}
-        xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
-        dm3_image_utils.save_image(xdata_in, s)
-        s.seek(0)
-        xdata = dm3_image_utils.load_image(s)
-        metadata_expected = {"one": [], "two": {}, "three": [1, 2]}
-        self.assertEqual(metadata_expected, xdata.metadata)
+        for version in (3, 4):
+            s = io.BytesIO()
+            data_in = numpy.ones((6, 4), numpy.float32)
+            data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
+            dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
+            intensity_calibration_in = Calibration.Calibration(4, 5, "six")
+            metadata_in = {"abc": None, "": "", "one": [], "two": {}, "three": [1, None, 2]}
+            xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
+            dm3_image_utils.save_image(xdata_in, s, version)
+            s.seek(0)
+            xdata = dm3_image_utils.load_image(s)
+            metadata_expected = {"one": [], "two": {}, "three": [1, 2]}
+            self.assertEqual(metadata_expected, xdata.metadata)
 
     def test_metadata_export_large_integer(self):
-        s = io.BytesIO()
-        data_in = numpy.ones((6, 4), numpy.float32)
-        data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
-        dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
-        intensity_calibration_in = Calibration.Calibration(4, 5, "six")
-        metadata_in = {"abc": 999999999999}
-        xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
-        dm3_image_utils.save_image(xdata_in, s)
-        s.seek(0)
-        xdata = dm3_image_utils.load_image(s)
-        metadata_expected = {"abc": 999999999999}
-        self.assertEqual(metadata_expected, xdata.metadata)
+        for version in (3, 4):
+            s = io.BytesIO()
+            data_in = numpy.ones((6, 4), numpy.float32)
+            data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
+            dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
+            intensity_calibration_in = Calibration.Calibration(4, 5, "six")
+            metadata_in = {"abc": 999999999999}
+            xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
+            dm3_image_utils.save_image(xdata_in, s, version)
+            s.seek(0)
+            xdata = dm3_image_utils.load_image(s)
+            metadata_expected = {"abc": 999999999999}
+            self.assertEqual(metadata_expected, xdata.metadata)
 
     def test_signal_type_round_trip(self):
-        s = io.BytesIO()
-        data_in = numpy.ones((12,), numpy.float32)
-        data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 1)
-        dimensional_calibrations_in = [Calibration.Calibration(1, 2, "eV")]
-        intensity_calibration_in = Calibration.Calibration(4, 5, "e")
-        metadata_in = {"hardware_source": {"signal_type": "EELS"}}
-        xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
-        dm3_image_utils.save_image(xdata_in, s)
-        s.seek(0)
-        xdata = dm3_image_utils.load_image(s)
-        metadata_expected = {'hardware_source': {'signal_type': 'EELS'}, 'Meta Data': {'Format': 'Spectrum', 'Signal': 'EELS'}}
-        self.assertEqual(metadata_expected, xdata.metadata)
+        for version in (3, 4):
+            s = io.BytesIO()
+            data_in = numpy.ones((12,), numpy.float32)
+            data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 1)
+            dimensional_calibrations_in = [Calibration.Calibration(1, 2, "eV")]
+            intensity_calibration_in = Calibration.Calibration(4, 5, "e")
+            metadata_in = {"hardware_source": {"signal_type": "EELS"}}
+            xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
+            dm3_image_utils.save_image(xdata_in, s, version)
+            s.seek(0)
+            xdata = dm3_image_utils.load_image(s)
+            metadata_expected = {'hardware_source': {'signal_type': 'EELS'}, 'Meta Data': {'Format': 'Spectrum', 'Signal': 'EELS'}}
+            self.assertEqual(metadata_expected, xdata.metadata)
 
     def test_reference_images_load_properly(self):
         shape_data_descriptors = (
@@ -297,7 +306,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
             # xdata = DataAndMetadata.new_data_and_metadata(data, dimensional_calibrations=dimensional_calibrations, intensity_calibration=intensity_calibration, data_descriptor=data_descriptor)
             # file_path = pathlib.Path(__file__).parent / "resources" / name
             # with file_path.open('wb') as f:
-            #     dm3_image_utils.save_image(xdata, f)
+            #     dm3_image_utils.save_image(xdata, f, 3)
 
             try:
                 s = io.BytesIO(pkgutil.get_data(__name__, f"resources/{name}"))
@@ -315,45 +324,10 @@ class TestDM3ImportExportClass(unittest.TestCase):
         file_path = "/path/to/test.dm3"
         with open(file_path, "rb") as f:
             xdata = dm3_image_utils.load_image(f)
-
         # file_path = "/path/to/test-new.dm3"
         # with open(file_path, "wb") as f:
-        #     dm3_image_utils.save_image(xdata, f)
-
-
-# some functions for processing multiple files.
-# useful for testing reading and writing a large number of files.
-import os
-
-
-def process_dm3(path, mode):
-    opath = path + ".out.dm3"
-    data = odata = None
-    if mode == 0 or mode == 1:  # just open source
-        # path=opath
-        with open(path, 'rb') as f:
-            data = parse_dm3.parse_dm_header(f)
-    if mode == 1:  # open source, write to out
-        with open(opath, 'wb') as f:
-            parse_dm3.parse_dm_header(f, outdata=data)
-    elif mode == 2:  # open both
-        with open(path, 'rb') as f:
-            data = parse_dm3.parse_dm_header(f)
-        with open(opath, 'rb') as f:
-            odata = parse_dm3.parse_dm_header(f)
-        # this ensures keys in root only are the same
-        assert(sorted(odata) == sorted(data))
-    return data, odata
-
-
-def process_all(mode):
-    for f in [x for x in os.listdir(".")
-              if x.endswith(".dm3")
-              if not x.endswith("out.dm3")]:
-        print("reading", f, "...")
-        data, odata = process_dm3(f, mode)
+        #     dm3_image_utils.save_image(xdata, f, 3)
 
 if __name__ == "__main__":
     logging.getLogger().setLevel(logging.DEBUG)
     unittest.main()
-    # process_all(1)

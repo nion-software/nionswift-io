@@ -9,6 +9,7 @@ long_type = int
 def str_to_iso8859_bytes(s):
     return bytes(s, 'ISO-8859-1')
 
+# marcel 2019-03-14  Adding capability to write dm4 files
 # mfm 2013-11-15 initial dm4 support
 # this should probably migrate into a class at some point.
 # No support for writing dm4 files, but shouldn't be hard -
@@ -88,7 +89,7 @@ class structarray(object):
         f.write(bytearray(self.raw_data))
 
 
-def parse_dm_header(f: typing.BinaryIO, outdata=None):
+def parse_dm_header(f: typing.BinaryIO, file_version: int=None, outdata=None):
     """
     This is the start of the DM file. We check for some
     magic values and then treat the next entry as a tag_root
@@ -98,22 +99,35 @@ def parse_dm_header(f: typing.BinaryIO, outdata=None):
     """
     # filesize is sizeondisk - 16. But we have 8 bytes of zero at the end of
     # the file.
+    # argh. why a global?
+    global size_type, version
     if outdata is not None:  # this means we're WRITING to the file
         if verbose:
             print(f"write_dm_header start {f.tell()}")
-        ver, file_size, endianness = 3, -1, 1
-        put_into_file(f, "> l l l", ver, file_size, endianness)
+        file_size, endianness = 0, 1
+        if file_version == 4:
+            version = 4
+            size_type = 'Q'
+        else:
+            version = 3
+            size_type = 'L'
+        put_into_file(f, "> l %c l" % size_type, version, file_size, endianness)
         start = f.tell()
         parse_dm_tag_root(f, outdata)
         end = f.tell()
-        # start is end of 3 long header. We want to write 2nd long
-        f.seek(start - 8)
-        # the real file size. We started counting after 12-byte version,fs,end
-        # and we need to subtract 16 total:
-        put_into_file(f, "> l", end - start + 4)
+        if version == 4:
+            # start is end of 1 int32 1 int64 and 1 int32 header. We want to write 2nd int32
+            f.seek(start - 12)
+            # the real file size. We started counting after 12-byte version,fs,end
+            # and we need to subtract 16 total:
+        else:
+            # start is end of 3 int32 header. We want to write 2nd int32
+            f.seek(start - 8)
+            # the real file size. We started counting after 12-byte version,fs,end
+            # and we need to subtract 16 total:
+        put_into_file(f, "> %c" % size_type, end - start + 4)
         f.seek(end)
-        enda, endb = 0, 0
-        put_into_file(f, "> l l", enda, endb)
+        put_into_file(f, "> l l", 0, 0)
         if verbose:
             print(f"write_dm_header end {f.tell()}")
     else:
@@ -121,8 +135,6 @@ def parse_dm_header(f: typing.BinaryIO, outdata=None):
             print(f"read_dm_header start {f.tell()}")
         ver = get_from_file(f, "> l")
         assert ver in [3,4], "Version must be 3 or 4, not %s" % ver
-        # argh. why a global?
-        global size_type, version
         if ver == 3:
             size_type = 'L'  # may be Q?
             version = 3
@@ -156,7 +168,7 @@ def parse_dm_tag_root(f: typing.BinaryIO, outdata=None):
             num_tags = sum(1 if v is not None else 0 for v in outdata)
         if verbose:
             print(f"write_dm_tag_root start {f.tell()} {is_dict} num of tags {num_tags}")
-        put_into_file(f, "> b b l", is_dict, _open, num_tags)
+        put_into_file(f, "> b b %c" % size_type, is_dict, _open, num_tags)
         if not is_dict:
             for subdata in outdata:
                 if subdata is not None:
@@ -201,11 +213,21 @@ def parse_dm_tag_entry(f: typing.BinaryIO, outdata=None, outname=None):
         put_into_file(f, "> b H", dtype, name_len)
         if outname:
             put_into_file(f, ">" + str(name_len) + "s", str_to_iso8859_bytes(outname))
+        start = f.tell()
+        if version == 4:
+            put_into_file(f, ">%c" % size_type, 0)
 
         if dtype == TAG_TYPE_DATA:
             parse_dm_tag_data(f, outdata)
         else:
             parse_dm_tag_root(f, outdata)
+
+        if version == 4:
+            end = f.tell()
+            f.seek(start)
+            put_into_file(f, ">%c" % size_type, end - start - 8)
+            f.seek(0, 2)
+
         if verbose:
             print(f"write_dm_tag_entry {outname} end {f.tell()}")
 
@@ -264,11 +286,15 @@ def parse_dm_tag_data(f: typing.BinaryIO, outdata=None):
         if not data_type:
             raise Exception("Unsupported type: {}".format(type(outdata)))
         _delim = "%%%%"
-        put_into_file(f, "> 4s l l", str_to_iso8859_bytes(_delim), 0, data_type)
+        fm = "> 4s %c %c" % (size_type, size_type)
+        put_into_file(f, fm, str_to_iso8859_bytes(_delim), 0, data_type)
         pos = f.tell()
         header = dm_types[data_type](f, outdata)
-        f.seek(pos-8)  # where our header_len starts
-        put_into_file(f, "> l", header+1)
+        if version == 4:
+            f.seek(pos-16)  # where our header_len starts
+        else:
+            f.seek(pos-8)
+        put_into_file(f, "> %c" % size_type, header+1)
         f.seek(0, 2)
         if verbose:
             print(f"write_dm_tag_data end {f.tell()}")
@@ -436,7 +462,7 @@ def dm_read_string(f: typing.BinaryIO, outdata=None):
             print(f"dm_write_string start {f.tell()}")
         outdata = outdata.encode("utf_16_le")
         slen = len(outdata)
-        put_into_file(f, ">L", slen)
+        put_into_file(f, ">%c" % size_type, slen)
         put_into_file(f, ">" + str(slen) + "s", str_to_iso8859_bytes(outdata))
         if verbose:
             print(f"dm_write_string end {f.tell()}")
@@ -445,7 +471,7 @@ def dm_read_string(f: typing.BinaryIO, outdata=None):
         assert(False)
         if verbose:
             print(f"dm_read_string start {f.tell()}")
-        slen = get_from_file(f, ">L")
+        slen = get_from_file(f, ">%c" % size_type)
         raws = get_from_file(f, ">" + str(slen) + "s")
         if verbose:
             print(f"dm_read_string end {f.tell()}")
@@ -458,10 +484,10 @@ dm_types[get_dmtype_for_name('string')] = dm_read_string
 def dm_read_struct_types(f: typing.BinaryIO, outtypes=None):
     if outtypes is not None:
         _len, nfields = 0, len(outtypes)
-        put_into_file(f, "> l l", _len, nfields)
+        put_into_file(f, "> %c %c" % (size_type, size_type), _len, nfields)
         for t in outtypes:
             _len = 0
-            put_into_file(f, "> l l", _len, t)
+            put_into_file(f, "> %c %c" % (size_type, size_type), _len, t)
         return 2+2*len(outtypes)
     else:
         types = []
@@ -524,9 +550,9 @@ def dm_read_array(f: typing.BinaryIO, outdata=None):
         if isinstance(outdata, structarray):
             # we write type, struct_types, length
             outdmtypes = [get_dmtype_for_structchar(s) for s in outdata.typecodes]
-            put_into_file(f, "> l", get_dmtype_for_name('struct'))
+            put_into_file(f, "> %c" % size_type, get_dmtype_for_name('struct'))
             struct_header = dm_read_struct_types(f, outtypes=outdmtypes)
-            put_into_file(f, "> L", outdata.num_elements())
+            put_into_file(f, "> %c" % size_type, outdata.num_elements())
             outdata.to_file(f)
             if verbose:
                 print(f"dm_write_array1 end {f.tell()}")
@@ -539,8 +565,8 @@ def dm_read_array(f: typing.BinaryIO, outdata=None):
             if dtype < 0:
                 print("typecode %s" % outdata.typecode)
             assert dtype >= 0
-            put_into_file(f, "> l", dtype)
-            put_into_file(f, "> L", int(len(outdata.tobytes()) / struct.calcsize(outdata.typecode)))
+            put_into_file(f, "> %c" % size_type, dtype)
+            put_into_file(f, "> %c" % size_type, int(len(outdata.tobytes()) / struct.calcsize(outdata.typecode)))
             if verbose:
                 print(f"dm_write_array2 end {dtype} {len(outdata)} {outdata.typecode} {f.tell()}")
             outdata.tofile(f)

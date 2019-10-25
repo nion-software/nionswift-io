@@ -253,7 +253,7 @@ def load_image(file: typing.BinaryIO) -> DataAndMetadata.DataAndMetadata:
                                                  timezone_offset=timezone_offset)
 
 
-def save_image(xdata: DataAndMetadata.DataAndMetadata, file: typing.BinaryIO) -> None:
+def save_image(xdata: DataAndMetadata.DataAndMetadata, file: typing.BinaryIO, file_version: int) -> None:
     """
     Saves the nparray data to the file-like object (or string) file.
     """
@@ -356,7 +356,7 @@ def save_image(xdata: DataAndMetadata.DataAndMetadata, file: typing.BinaryIO) ->
         dm_metadata["TimezoneOffset"] = timezone_offset
     ret["ImageList"][0]["ImageTags"] = dm_metadata
     ret["InImageMode"] = True
-    parse_dm3.parse_dm_header(file, ret)
+    parse_dm3.parse_dm_header(file, file_version, ret)
 
 
 # logging.debug(image_tags['ImageData']['Calibrations'])

@@ -4,6 +4,7 @@
 
 # standard libraries
 import gettext
+import pathlib
 
 # third party libraries
 from nion.data import DataAndMetadata
@@ -28,9 +29,10 @@ class DM3IODelegate(object):
             return dm3_image_utils.load_image(f)
 
     def can_write_data_and_metadata(self, data_and_metadata, extension):
-        return extension == "dm3"
+        return extension.lower() in self.io_handler_extensions
 
-    def write_data_and_metadata(self, data_and_metadata, file_path, extension):
+    def write_data_and_metadata(self, data_and_metadata, file_path_str: str, extension):
+        file_path = pathlib.Path(file_path_str)
         data = data_and_metadata.data
         data_descriptor = data_and_metadata.data_descriptor
         dimensional_calibrations = list()
@@ -53,7 +55,7 @@ class DM3IODelegate(object):
                                                           timestamp=timestamp,
                                                           timezone=timezone,
                                                           timezone_offset=timezone_offset)
-            dm3_image_utils.save_image(xdata, f)
+            dm3_image_utils.save_image(xdata, f, 4 if file_path.suffix == ".dm4" else 3)
 
 
 def load_image(file_path):
