@@ -10,7 +10,7 @@ import os
 
 setuptools.setup(
     name="nionswift-io",
-    version="0.13.9",
+    version="0.14.0",
     author="Nion Software",
     author_email="swift@nion.com",
     description="IO handlers for NionSwift.",
