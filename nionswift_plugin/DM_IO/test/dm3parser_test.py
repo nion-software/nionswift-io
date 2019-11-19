@@ -1,13 +1,8 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Sun May 19 07:58:10 2013
-
-@author: matt
-"""
-
 import array
 import datetime
 import io
+import itertools
 import logging
 import pkgutil
 import os
@@ -293,26 +288,31 @@ class TestDM3ImportExportClass(unittest.TestCase):
             ((4, 3, 2), DataAndMetadata.DataDescriptor(False, 1, 2)),   # 1d collection of images
             ((3, 4, 5), DataAndMetadata.DataDescriptor(True, 0, 2)),    # sequence of images
         )
-        for shape, data_descriptor in shape_data_descriptors:
+        for (shape, data_descriptor), version in itertools.product(shape_data_descriptors, (3, 4)):
             dimensional_calibrations = list()
             for index, dimension in enumerate(shape):
                 dimensional_calibrations.append(Calibration.Calibration(1.0 + 0.1 * index, 2.0 + 0.2 * index, "µ" + "n" * index))
             intensity_calibration = Calibration.Calibration(4, 5, "six")
             data = numpy.arange(numpy.product(shape), dtype=numpy.float32).reshape(shape)
 
-            name = f"ref_{'T' if data_descriptor.is_sequence else 'F'}_{data_descriptor.collection_dimension_count}_{data_descriptor.datum_dimension_count}.dm3"
+            name = f"ref_{'T' if data_descriptor.is_sequence else 'F'}_{data_descriptor.collection_dimension_count}_{data_descriptor.datum_dimension_count}.dm{version}"
 
             # import pathlib
             # xdata = DataAndMetadata.new_data_and_metadata(data, dimensional_calibrations=dimensional_calibrations, intensity_calibration=intensity_calibration, data_descriptor=data_descriptor)
             # file_path = pathlib.Path(__file__).parent / "resources" / name
             # with file_path.open('wb') as f:
-            #     dm3_image_utils.save_image(xdata, f, 3)
+            #     dm3_image_utils.save_image(xdata, f, version)
 
             try:
                 s = io.BytesIO(pkgutil.get_data(__name__, f"resources/{name}"))
                 xdata = dm3_image_utils.load_image(s)
-                self.assertEqual(intensity_calibration, xdata.intensity_calibration)
-                self.assertEqual(dimensional_calibrations, xdata.dimensional_calibrations)
+                self.assertAlmostEqual(intensity_calibration.scale, xdata.intensity_calibration.scale, 6)
+                self.assertAlmostEqual(intensity_calibration.offset, xdata.intensity_calibration.offset, 6)
+                self.assertEqual(intensity_calibration.units, xdata.intensity_calibration.units)
+                for c1, c2 in zip(dimensional_calibrations, xdata.dimensional_calibrations):
+                    self.assertAlmostEqual(c1.scale, c2.scale, 6)
+                    self.assertAlmostEqual(c1.offset, c2.offset, 6)
+                    self.assertEqual(c1.units, c2.units)
                 self.assertEqual(data_descriptor, xdata.data_descriptor)
                 self.assertTrue(numpy.array_equal(data, xdata.data))
                 # print(f"{name} {data_descriptor} PASS")
