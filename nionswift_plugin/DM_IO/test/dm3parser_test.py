@@ -129,7 +129,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
                 current_working_directory = os.getcwd()
                 self.__workspace_dir = os.path.join(current_working_directory, "__Test")
                 db_make_directory_if_needed(self.__workspace_dir)
-                self.f = h5py.File(os.path.join(self.__workspace_dir, "file.h5"))
+                self.f = h5py.File(os.path.join(self.__workspace_dir, "file.h5"), "a")
                 self.data = self.f.create_dataset("data", data=numpy.ones(shape, dtype))
             def __enter__(self):
                 return self
