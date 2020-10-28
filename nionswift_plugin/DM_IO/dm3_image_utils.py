@@ -218,7 +218,7 @@ def load_image(file: typing.BinaryIO) -> DataAndMetadata.DataAndMetadata:
     if 'ImageTags' in image_tags:
         voltage = image_tags['ImageTags'].get('ImageScanned', dict()).get('EHT', dict())
         if voltage:
-            properties.setdefault("hardware_source", dict())["autostem"] = { "high_tension_v": float(voltage) }
+            properties.setdefault("hardware_source", dict())["autostem"] = { "high_tension": float(voltage) }
         dm_metadata_signal = image_tags['ImageTags'].get('Meta Data', dict()).get('Signal')
         if dm_metadata_signal and dm_metadata_signal.lower() == "eels":
             properties.setdefault("hardware_source", dict())["signal_type"] = dm_metadata_signal
