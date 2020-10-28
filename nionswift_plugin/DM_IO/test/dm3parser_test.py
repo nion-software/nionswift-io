@@ -153,22 +153,26 @@ class TestDM3ImportExportClass(unittest.TestCase):
             for array_type in array_types:
                 for dtype in dtypes:
                     for shape, data_descriptor_in in shape_data_descriptors:
-                        s = io.BytesIO()
-                        with array_type(shape, dtype) as a:
-                            data_in = a.data
-                            dimensional_calibrations_in = list()
-                            for index, dimension in enumerate(shape):
-                                dimensional_calibrations_in.append(Calibration.Calibration(1.0 + 0.1 * index, 2.0 + 0.2 * index, "µ" + "n" * index))
-                            intensity_calibration_in = Calibration.Calibration(4, 5, "six")
-                            metadata_in = dict()
-                            xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
-                            dm3_image_utils.save_image(xdata_in, s, version)
-                            s.seek(0)
-                            xdata = dm3_image_utils.load_image(s)
-                            self.assertTrue(numpy.array_equal(data_in, xdata.data))
-                            self.assertEqual(data_descriptor_in, xdata.data_descriptor)
-                            self.assertEqual(dimensional_calibrations_in, xdata.dimensional_calibrations)
-                            self.assertEqual(intensity_calibration_in, xdata.intensity_calibration)
+                        for signal_type in ((None, "eels") if data_descriptor_in.datum_dimension_count ==1 else (None,)):
+                            # print(f"--- {array_type} {dtype} {shape} {data_descriptor_in} {signal_type}")
+                            s = io.BytesIO()
+                            with array_type(shape, dtype) as a:
+                                data_in = a.data
+                                dimensional_calibrations_in = list()
+                                for index, dimension in enumerate(shape):
+                                    dimensional_calibrations_in.append(Calibration.Calibration(1.0 + 0.1 * index, 2.0 + 0.2 * index, "µ" + "n" * index))
+                                intensity_calibration_in = Calibration.Calibration(4, 5, "six")
+                                metadata_in = dict()
+                                if signal_type:
+                                    metadata_in.setdefault("hardware_source", dict())["signal_type"] = signal_type
+                                xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
+                                dm3_image_utils.save_image(xdata_in, s, version)
+                                s.seek(0)
+                                xdata = dm3_image_utils.load_image(s)
+                                self.assertTrue(numpy.array_equal(data_in, xdata.data))
+                                self.assertEqual(data_descriptor_in, xdata.data_descriptor)
+                                self.assertEqual(dimensional_calibrations_in, xdata.dimensional_calibrations)
+                                self.assertEqual(intensity_calibration_in, xdata.intensity_calibration)
 
     def test_rgb_data_write_read_round_trip(self):
         for version in (3, 4):

@@ -4,6 +4,7 @@ Changelog (nionswift-io)
 0.14.1 (UNRELEASED)
 -------------------
 - Write out high tension tag with no units.
+- Improve writing SI data (always mark 1D datum as a spectrum).
 
 0.14.0 (2019-11-12)
 -------------------
