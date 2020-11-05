@@ -8,11 +8,15 @@ matrix:
     - python: 3.8
       dist: xenial
       sudo: true
+    - python: 3.9
+      dist: xenial
+      sudo: true
     - python: nightly
       dist: xenial
       sudo: true
   allow_failures:
     - python: nightly
+    - python: 3.9
 
 branches:
   only:
