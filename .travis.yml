@@ -16,7 +16,6 @@ matrix:
       sudo: true
   allow_failures:
     - python: nightly
-    - python: 3.9
 
 branches:
   only:
