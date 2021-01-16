@@ -230,7 +230,19 @@ class TestDM3ImportExportClass(unittest.TestCase):
             data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
             dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
             intensity_calibration_in = Calibration.Calibration(4, 5, "six")
-            metadata_in = {"abc": 1, "def": "abc", "efg": { "one": 1, "two": "TWO", "three": [3, 4, 5] }}
+            metadata_in = {
+                "abc": 1, "def": "abc",
+                "efg": {
+                    "one": 1, "two": "TWO",
+                    "three": [3, 4, 5], "threef": [3.0, 4.0, 5.0],
+                    "four": (32, 32), "fourf": (33.0, 34.0),
+                    "six": ((1, 2), (3, 4)), "sixf": ((1.0, 2.0), (3.0, 4.0)),
+                    "seven": [[1, 2], [3, 4]], "sevenf": [[1.0, 2.0], [3.0, 4.0]],
+                    # the following will not work until there is a schema or other type hinting to distinguish
+                    # this from the "six" case.
+                    # "eight": (1, 2, 3, 4), "eightf": (1.0, 2.0, 3.0, 4.0),
+                }
+            }
             xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
             dm3_image_utils.save_image(xdata_in, s, version)
             s.seek(0)
