@@ -1,8 +1,8 @@
 Changelog (nionswift-io)
 ========================
 
-UNRELEASED
-----------
+0.14.3 (2021-01-16)
+-------------------
 - Partially fix issue storing tuple-of-tuple as rectangle in dm3 import/export.
 
 0.14.2 (2020-11-04)
