@@ -1,4 +1,5 @@
 import array
+import itertools
 import struct
 import logging
 import re
@@ -506,6 +507,8 @@ def dm_read_struct(f: typing.BinaryIO, outdata=None):
         if verbose:
             print(f"dm_write_struct start {f.tell()}")
         start = f.tell()
+        if isinstance(outdata, tuple) and len(outdata) > 1 and all(isinstance(d, (tuple, list)) for d in outdata):
+            outdata = tuple(itertools.chain(*outdata))
         types = [get_structdmtypes_for_python_typeorobject(x)[1]
                  for x in outdata]
         header = dm_read_struct_types(f, types)
@@ -536,6 +539,13 @@ def dm_read_struct(f: typing.BinaryIO, outdata=None):
             ret.append(d)
         if verbose:
             print(f"dm_read_struct end {f.tell()}")
+        if len(ret) == 4:
+            # this is a hack to restore flattened rectangles.
+            # rectangle structures (tuples) are stored in json as ((t, l), (h, w))
+            # rectangles in dm are stored as (t, l, h, w)
+            # rectangles in json may also be stored as a list; this works properly in dm tags already
+            # long term, there needs to either be a schema or hints to distinguish between rectangles and structs with 4 items.
+            ret = [(ret[0], ret[1]), (ret[2], ret[3])]
         return tuple(ret), header
 
 dm_types[get_dmtype_for_name('struct')] = dm_read_struct

@@ -1,6 +1,10 @@
 Changelog (nionswift-io)
 ========================
 
+UNRELEASED
+----------
+- Partially fix issue storing tuple-of-tuple as rectangle in dm3 import/export.
+
 0.14.2 (2020-11-04)
 -------------------
 - Write out high tension tag with no units.
