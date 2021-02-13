@@ -366,7 +366,7 @@ class TIFFIODelegate_ImageJ(TIFFIODelegateBase):
             # TODO: support data that is a sequence AND a collection
 
             # create shape that is used for tif so that array is interpreted correctly by imagej
-            tifffile_shape = numpy.ones(6, dtype=numpy.int)
+            tifffile_shape = numpy.ones(6, dtype=int)
 
             # last data axis depends on whether data is rgb(a) or not
             last_data_axis = -1
