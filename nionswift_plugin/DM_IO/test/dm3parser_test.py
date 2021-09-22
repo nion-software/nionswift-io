@@ -171,7 +171,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
                                 xdata = dm3_image_utils.load_image(s)
                                 self.assertTrue(numpy.array_equal(data_in, xdata.data))
                                 self.assertEqual(data_descriptor_in, xdata.data_descriptor)
-                                self.assertEqual(dimensional_calibrations_in, xdata.dimensional_calibrations)
+                                self.assertEqual(tuple(dimensional_calibrations_in), tuple(xdata.dimensional_calibrations))
                                 self.assertEqual(intensity_calibration_in, xdata.intensity_calibration)
 
     def test_rgb_data_write_read_round_trip(self):
@@ -194,14 +194,14 @@ class TestDM3ImportExportClass(unittest.TestCase):
             s = io.BytesIO()
             data_in = numpy.ones((6, 4), numpy.float32)
             data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
-            dimensional_calibrations_in = [Calibration.Calibration(1.1, 2.1, "nm"), Calibration.Calibration(2, 3, u"µm")]
+            dimensional_calibrations_in = (Calibration.Calibration(1.1, 2.1, "nm"), Calibration.Calibration(2, 3, u"µm"))
             intensity_calibration_in = Calibration.Calibration(4.4, 5.5, "six")
             metadata_in = dict()
             xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
             dm3_image_utils.save_image(xdata_in, s, version)
             s.seek(0)
             xdata = dm3_image_utils.load_image(s)
-            self.assertEqual(dimensional_calibrations_in, xdata.dimensional_calibrations)
+            self.assertEqual(tuple(dimensional_calibrations_in), tuple(xdata.dimensional_calibrations))
             self.assertEqual(intensity_calibration_in, xdata.intensity_calibration)
 
     def test_data_timestamp_write_read_round_trip(self):
