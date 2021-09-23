@@ -1,6 +1,10 @@
 Changelog (nionswift-io)
 ========================
 
+NEXT RELEASE
+------------
+- Drop support for Python 3.7.
+
 0.14.3 (2021-01-16)
 -------------------
 - Partially fix issue storing tuple-of-tuple as rectangle in dm3 import/export.
