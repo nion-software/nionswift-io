@@ -339,9 +339,9 @@ def save_image(xdata: DataAndMetadata.DataAndMetadata, file: typing.BinaryIO, fi
         dm_metadata.setdefault("Meta Data", dict())["Format"] = "Spectrum image"
         dm_metadata.setdefault("Meta Data", dict())["Signal"] = "EELS"
         needs_slice = True
-    # 1d data is always marked as spectrum
     if data_descriptor.datum_dimension_count == 1:
-        dm_metadata.setdefault("Meta Data", dict())["Format"] = "Spectrum"
+        # 1d data is always marked as spectrum
+        dm_metadata.setdefault("Meta Data", dict())["Format"] = "Spectrum image" if data_descriptor.collection_dimension_count == 2 else "Spectrum"
     if (1 if data_descriptor.is_sequence else 0) + data_descriptor.collection_dimension_count == 1 or needs_slice:
         if data_descriptor.is_sequence or is_sequence:
             dm_metadata.setdefault("Meta Data", dict())["IsSequence"] = True
