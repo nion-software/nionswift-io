@@ -1,10 +1,11 @@
 Changelog (nionswift-io)
 ========================
 
-NEXT RELEASE
-------------
-- Drop support for Python 3.7.
+0.15.0 (2021-11-12)
+-------------------
 - Fix handling of spectrum image export in DM format (now recognized in DM).
+- Drop support for Python 3.7.
+- Compatible with Swift 0.16
 
 0.14.3 (2021-01-16)
 -------------------
