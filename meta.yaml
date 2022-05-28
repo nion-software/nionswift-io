@@ -1,9 +1,9 @@
 package:
   name: 'nionswift-io'
-  version: '0.15.0'
+  version: '0.15.1'
 
 source:
-  git_rev: 0.15.0
+  git_rev: 0.15.1
   git_url: https://github.com/nion-software/nionswift-io.git
 
 build:
@@ -20,7 +20,7 @@ requirements:
   run:
     - python >=3.8
     - nionutils >=0.4.0,<0.5.0
-    - niondata >=0.14.0,<0.15.0
+    - niondata >=0.14.0,<0.16.0
     - numpy >=1.21,<2.0
 
 test:

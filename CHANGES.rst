@@ -1,6 +1,10 @@
 Changelog (nionswift-io)
 ========================
 
+0.15.1 (2022-05-28)
+-------------------
+- Update dependencies for Swift 0.16.3 compatibility.
+
 0.15.0 (2021-11-12)
 -------------------
 - Fix handling of spectrum image export in DM format (now recognized in DM).
