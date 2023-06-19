@@ -309,7 +309,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
             for index, dimension in enumerate(shape):
                 dimensional_calibrations.append(Calibration.Calibration(1.0 + 0.1 * index, 2.0 + 0.2 * index, "µ" + "n" * index))
             intensity_calibration = Calibration.Calibration(4, 5, "six")
-            data = numpy.arange(numpy.product(shape), dtype=numpy.float32).reshape(shape)
+            data = numpy.arange(numpy.prod(shape), dtype=numpy.float32).reshape(shape)
 
             name = f"ref_{'T' if data_descriptor.is_sequence else 'F'}_{data_descriptor.collection_dimension_count}_{data_descriptor.datum_dimension_count}.dm{version}"
 
