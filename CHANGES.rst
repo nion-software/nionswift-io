@@ -1,7 +1,11 @@
 Changelog (nionswift-io)
 ========================
 
-15.2.0 (2022-08-17)
+15.2.1 (2023-10-23)
+-------------------
+- Update requirements.
+
+15.2.0 (2023-08-17)
 -------------------
 - Update requirements, version.
 - Add Python 3.11 support; drop Python 3.8 support.
