@@ -131,9 +131,9 @@ def ndarray_to_imagedatadict(nparr):
         if nparr.dtype.type in np_to_structarray_map:
             types = np_to_structarray_map[nparr.dtype.type]
             ret["Data"] = parse_dm3.structarray(types)
-            ret["Data"].raw_data = bytes(numpy.array(nparr, copy=False).data)
+            ret["Data"].raw_data = bytes(numpy.asarray(nparr).data)
         else:
-            ret["Data"] = parse_dm3.array.array(platform_independent_char(nparr.dtype), numpy.array(nparr, copy=False).flatten())
+            ret["Data"] = parse_dm3.array.array(platform_independent_char(nparr.dtype), numpy.asarray(nparr).flatten())
     return ret
 
 
