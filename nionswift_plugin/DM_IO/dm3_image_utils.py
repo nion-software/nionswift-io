@@ -94,8 +94,10 @@ def platform_independent_char(dtype):
     # on linux/macos where 'l' has size 8, ints of size 4 are reported as 'i'
     # on windows where 'l' has size 4, ints of size 4 are reported as 'l'
     # this function fixes that issue.
-    if numpy.dtype('int').itemsize == numpy.dtype('int32').itemsize and dtype.char == 'l': return 'i'
-    if numpy.dtype('uint').itemsize == numpy.dtype('uint32').itemsize and dtype.char == 'L': return 'I'
+    if dtype.char == 'l' and dtype.itemsize == 4: return 'i'
+    if dtype.char == 'l' and dtype.itemsize == 8: return 'q'
+    if dtype.char == 'L' and dtype.itemsize == 4: return 'I'
+    if dtype.char == 'L' and dtype.itemsize == 8: return 'Q'
     return dtype.char
 
 
