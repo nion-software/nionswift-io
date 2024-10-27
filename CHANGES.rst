@@ -1,6 +1,10 @@
 Changelog (nionswift-io)
 ========================
 
+15.3.0 (2024-10-27)
+-------------------
+- Require Numpy 2. Add Python 3.13 support. Drop Python 3.9, 3.10 support.
+
 15.2.1 (2023-10-23)
 -------------------
 - Update requirements.
