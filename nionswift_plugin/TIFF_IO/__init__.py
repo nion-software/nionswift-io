@@ -10,17 +10,14 @@
 """
 
 # standard libraries
+import datetime
 import gettext
+import json
 import logging
-import warnings
 
 # third party libraries
-with warnings.catch_warnings():
-    warnings.simplefilter("ignore")
-    from . import tifffile
 import numpy
-import datetime
-import json
+import tifffile
 
 # local libraries
 # None
@@ -102,7 +99,7 @@ class TIFFIODelegateBase:
             # last data axis depends on whether data is rgb(a)
             last_data_axis = -1
             is_rgb = False
-            if tiffpage.photometric in (tifffile.TIFF.PHOTOMETRIC.RGB, tifffile.TIFF.PHOTOMETRIC.PALETTE):
+            if tiffpage.photometric in (tifffile.PHOTOMETRIC.RGB, tifffile.PHOTOMETRIC.PALETTE):
                 # print('Image is rgb type, (shape: {})'.format(data.shape))
                 is_rgb = True
                 if expected_number_dimensions is not None:
@@ -327,7 +324,7 @@ class TIFFIODelegate_Baseline(TIFFIODelegateBase):
                     data_01 = numpy.zeros(data.shape, numpy.uint16)
                 data = (data_01 * 65535).astype(numpy.uint16)
 
-            tifffile.imsave(stream, data, software='Nion Swift')
+            tifffile.imwrite(stream, data, software='Nion Swift')
 
 
 class TIFFIODelegate_ImageJ(TIFFIODelegateBase):
@@ -460,9 +457,9 @@ class TIFFIODelegate_ImageJ(TIFFIODelegateBase):
             if not data.dtype in [numpy.float32, numpy.uint8, numpy.uint16]:
                 data = data.astype(numpy.float32)
             try:
-                tifffile.imsave(stream, data, resolution=resolution, imagej=True, metadata=tifffile_metadata, software='Nion Swift')
+                tifffile.imwrite(stream, data, resolution=resolution, imagej=True, metadata=tifffile_metadata, software='Nion Swift')
             except Exception as detail:
-                tifffile.imsave(stream, data, resolution=resolution, metadata=tifffile_metadata)
+                tifffile.imwrite(stream, data, resolution=resolution, metadata=tifffile_metadata)
                 logging.warn('Could not save metadata in tiff. Reason: ' + str(detail))
 
     def __extract_data_element_dict_from_data_and_metadata(self, data_and_metadata):
