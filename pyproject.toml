@@ -1,3 +1,9 @@
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = [
+    "nionswift_plugin/DM_IO",
+    "nionswift_plugin/TIFF_IO"
+]
