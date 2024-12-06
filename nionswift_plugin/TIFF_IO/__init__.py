@@ -12,15 +12,18 @@
 # standard libraries
 import datetime
 import gettext
+import io
 import json
 import logging
+import typing
 
 # third party libraries
 import numpy
 import tifffile
 
 # local libraries
-# None
+from nion.data import Calibration
+from nion.data import DataAndMetadata
 
 
 _ = gettext.gettext
@@ -31,19 +34,26 @@ NION_TAG = 'nion.1'
 
 class TIFFIODelegateBase:
 
-    def __init__(self, api):
+    def __init__(self, api: typing.Any) -> None:
         self.__api = api
         self.io_handler_extensions = ["tif", "tiff"]
 
-    def read_data_and_metadata(self, extension, file_path):
+    def read_data_and_metadata(self, extension: str, file_path: str) -> DataAndMetadata.DataAndMetadata:
         return self.read_data_and_metadata_from_stream(file_path)
 
-    def read_data_and_metadata_from_stream(self, stream):
+    def read_data_and_metadata_from_stream(self, stream: str | io.BytesIO) -> DataAndMetadata.DataAndMetadata:
         x_resolution = y_resolution = unit = x_offset = y_offset = None
         data_element_dict = None
-        dimensional_calibrations = intensity_calibration = timestamp = data_descriptor = metadata = None
+        dimensional_calibrations: typing.Optional[list[Calibration.Calibration]] = None
+        intensity_calibration: typing.Optional[Calibration.Calibration] = None
+        timestamp: typing.Optional[datetime.datetime] = None
+        data_descriptor: typing.Optional[DataAndMetadata.DataDescriptor] = None
+        metadata: typing.Optional[dict[str, typing.Any]] = None
         # Imagej axes names
-        images = channels = slices = frames = None
+        images: typing.Optional[typing.Any] = None
+        channels: typing.Optional[typing.Any] = None
+        slices: typing.Optional[typing.Any] = None
+        frames: typing.Optional[typing.Any] = None
 
         with tifffile.TiffFile(stream) as tiffimage:
             # TODO: Check whether support for multiple tif pages is necessary (for imagej compatible tifs it isn't)
@@ -52,7 +62,7 @@ class TIFFIODelegateBase:
             # to properly load these files as well. However, right now, only the first page will be loaded and imported.
             # 2019/04/15 new tifffile version also seems to put imagej tiff stacks into multiple pages. Reworked import
             # so that it works for now and added tests that should fail if tifffile behavior changes again.
-            tiffpage = tiffimage.pages[0]
+            tiffpage = typing.cast(tifffile.tifffile.TiffPage, tiffimage.pages[0])
             tiffpageseries = tiffimage.series[0]
             # Try if image is imagej type
             if tiffimage.is_imagej:
@@ -62,22 +72,26 @@ class TIFFIODelegateBase:
                 if tiffpage.tags.get('YResolution') is not None:
                     y_resolution = tiffpage.tags['YResolution'].value
                     y_resolution = y_resolution[0] / y_resolution[1]
-                if tiffimage.imagej_metadata.get(NION_TAG) is not None:
-                    data_element_dict = json.loads(tiffimage.imagej_metadata[NION_TAG])
-                unit = tiffimage.imagej_metadata.get('unit')
-                images = tiffimage.imagej_metadata.get('images')
-                channels = tiffimage.imagej_metadata.get('channels')
-                slices = tiffimage.imagej_metadata.get('slices')
-                frames = tiffimage.imagej_metadata.get('frames')
-                # samples = tiffimage.imagej_metadata.get('samples')
+                imagej_metadata = tiffimage.imagej_metadata
+                if imagej_metadata:
+                    if imagej_metadata.get(NION_TAG) is not None:
+                        data_element_dict = json.loads(imagej_metadata[NION_TAG])
+                    unit = imagej_metadata.get('unit')
+                    images = imagej_metadata.get('images')
+                    channels = imagej_metadata.get('channels')
+                    slices = imagej_metadata.get('slices')
+                    frames = imagej_metadata.get('frames')
+                    # samples = tiffimage.imagej_metadata.get('samples')
 
             # Try to get Nion metadata if file is not imagej type
             if data_element_dict is None:
                 description = tiffpage.tags.get('image_description')
-                description_dict = {}
+                description_dict = dict[str, typing.Any]()
                 if description is not None:
                     try:
-                        description_dict = tifffile.image_description_dict(description.value)
+                        # not sure what this is doing. needs more testing.
+                        # description_dict = tifffile.image_description_dict(description.value)
+                        pass
                     except ValueError as detail:
                         print(detail)
                 try:
@@ -219,9 +233,10 @@ class TIFFIODelegateBase:
                                                         scale=(1 / x_resolution) if x_resolution else None,
                                                         units=unit)]
                     # Add "empty" calibrations for remaining axis
-                    number_calibrations = len(dimensional_calibrations)
-                    for i in range(len(data_shape) - number_calibrations):
-                        dimensional_calibrations.append(self.__api.create_calibration())
+                    if dimensional_calibrations:
+                        number_calibrations = len(dimensional_calibrations)
+                        for i in range(len(data_shape) - number_calibrations):
+                            dimensional_calibrations.append(self.__api.create_calibration())
                 else:
                     # Assume that x- and y-calibration is for data
                     if data_element_dict.get('datum_dimension_count', 1) == 1:
@@ -264,13 +279,20 @@ class TIFFIODelegateBase:
         # print('Data shape: ' + str(data.shape))
         data_and_metadata = self.__api.create_data_and_metadata(data, intensity_calibration, dimensional_calibrations,
                                                                 metadata, timestamp, data_descriptor)
-        return data_and_metadata
+        return typing.cast(DataAndMetadata.DataAndMetadata, data_and_metadata)
 
-    def write_data_item(self, data_item, file_path, extension) -> None:
+    def write_data_item(self, data_item: typing.Any, file_path: str, extension: str) -> None:
         self.write_data_item_stream(data_item, file_path)
 
-    def __create_data_info_objects_from_data_element_dict(self, metadata_dict):
-        dimensional_calibrations = intensity_calibration = timestamp = data_descriptor = metadata = None
+    def write_data_item_stream(self, data_item: typing.Any, stream: str) -> None:
+        pass
+
+    def __create_data_info_objects_from_data_element_dict(self, metadata_dict: dict[str, typing.Any]) -> typing.Tuple[typing.Optional[typing.List[Calibration.Calibration]], typing.Optional[Calibration.Calibration], typing.Optional[datetime.datetime], typing.Optional[DataAndMetadata.DataDescriptor], typing.Optional[dict[str, typing.Any]]]:
+        dimensional_calibrations: typing.Optional[list[Calibration.Calibration]] = None
+        intensity_calibration: typing.Optional[Calibration.Calibration] = None
+        timestamp: typing.Optional[datetime.datetime] = None
+        data_descriptor: typing.Optional[DataAndMetadata.DataDescriptor] = None
+        metadata: typing.Optional[dict[str, typing.Any]] = None
         if metadata_dict.get('spatial_calibrations') is not None:
             dimensional_calibrations = []
             for calibration in metadata_dict['spatial_calibrations']:
@@ -289,12 +311,12 @@ class TIFFIODelegateBase:
 
 class TIFFIODelegate_Baseline(TIFFIODelegateBase):
 
-    def __init__(self, api):
+    def __init__(self, api: typing.Any) -> None:
         super().__init__(api)
         self.io_handler_id = "tiff-io-handler-baseline"
         self.io_handler_name = _("TIFF Files (Baseline)")
 
-    def can_write_data_and_metadata(self, data_and_metadata, extension):
+    def can_write_data_and_metadata(self, data_and_metadata: DataAndMetadata.DataAndMetadata, extension: str) -> bool:
         if data_and_metadata.is_sequence:
             return False
         if data_and_metadata.collection_dimension_count == 2 and data_and_metadata.datum_dimension_count == 0:
@@ -303,10 +325,10 @@ class TIFFIODelegate_Baseline(TIFFIODelegateBase):
             return True
         return False
 
-    def write_data_item_stream(self, data_item, stream) -> None:
+    def write_data_item_stream(self, data_item: typing.Any, stream: str) -> None:
         self.write_data_and_metadata_stream(data_item.display_xdata, stream)
 
-    def write_data_and_metadata_stream(self, data_and_metadata, stream) -> None:
+    def write_data_and_metadata_stream(self, data_and_metadata: DataAndMetadata.DataAndMetadata, stream: str | io.BytesIO) -> None:
         data = data_and_metadata.data
 
         if data is not None:
@@ -329,7 +351,7 @@ class TIFFIODelegate_Baseline(TIFFIODelegateBase):
 
 class TIFFIODelegate_ImageJ(TIFFIODelegateBase):
 
-    def __init__(self, api):
+    def __init__(self, api: typing.Any) -> None:
         super().__init__(api)
         self.io_handler_id = "tiff-io-handler-imagej"
         self.io_handler_name = _("TIFF Files (ImageJ)")
@@ -339,14 +361,14 @@ class TIFFIODelegate_ImageJ(TIFFIODelegateBase):
         # we restore the data correcty even without the Swift metadata.
         self._include_nion_metadata = True
 
-    def can_write_data_and_metadata(self, data_and_metadata, extension) -> bool:
+    def can_write_data_and_metadata(self, data_and_metadata: DataAndMetadata.DataAndMetadata, extension: str) -> bool:
         # return data_and_metadata.is_data_2d or data_and_metadata.is_data_1d or data_and_metadata.is_data_3d
         return len(data_and_metadata.data_shape) < 5
 
-    def write_data_item_stream(self, data_item, stream) -> None:
+    def write_data_item_stream(self, data_item: typing.Any, stream: str) -> None:
         self.write_data_and_metadata_stream(data_item.xdata, stream)
 
-    def write_data_and_metadata_stream(self, data_and_metadata, stream) -> None:
+    def write_data_and_metadata_stream(self, data_and_metadata: DataAndMetadata.DataAndMetadata, stream: str | io.BytesIO) -> None:
         data = data_and_metadata.data
 
         tifffile_metadata = {}
@@ -380,6 +402,7 @@ class TIFFIODelegate_ImageJ(TIFFIODelegateBase):
                 tifffile_shape[-1] = 4
                 last_data_axis = -2
 
+            resolution: tuple[float | tuple[int, int], float | tuple[int, int]] | None = None
             if data_and_metadata.collection_dimension_count > 0:
                 # if data is a collection, put collection axis in x-and y of tif
                 if data_and_metadata.collection_dimension_count == 1:
@@ -387,7 +410,7 @@ class TIFFIODelegate_ImageJ(TIFFIODelegateBase):
                     tifffile_shape[4] = data_shape[0]
 
                 # use collection x-calibration as x-calibration in tif
-                resolution = (1 / calibrations[0].scale, ) if calibrations[0].scale != 0 else (1, )
+                resolution_ = [1 / calibrations[0].scale, 1.0] if calibrations[0].scale != 0 else [1.0, 1.0]
                 # use x-unit in tif (unfortunately there is no way to save separate units for x- and y)
                 unit = calibrations[0].units
                 # if data is a 2d-collection, also fill y-axis of tif
@@ -396,12 +419,13 @@ class TIFFIODelegate_ImageJ(TIFFIODelegateBase):
                     tifffile_shape[4] = data_shape[1]
                     tifffile_shape[3] = data_shape[0]
                     # add collection y-calibration as y-calibration in tif
-                    resolution += (1 / calibrations[1].scale, ) if calibrations[1].scale != 0 else (1, )
+                    resolution_[1] = 1 / calibrations[1].scale if calibrations[1].scale != 0 else 1.0
                 # for data x-axis use tif "channel" axis
                 tifffile_shape[2] = data_shape[-1]
                 # if data is 2d, put y-axis in tif z-axis (there is no better option unfortunately)
                 if data_and_metadata.datum_dimension_count == 2:
                     tifffile_shape[1] = data_shape[-2]
+                resolution = resolution_[0], resolution_[1]
             else:
                 if data_and_metadata.is_sequence:
                     # Put sequence axis in "time" axis of tif
@@ -409,14 +433,15 @@ class TIFFIODelegate_ImageJ(TIFFIODelegateBase):
                 # data x-axis goes in tif x-axis
                 tifffile_shape[4] = data_shape[-1]
                 # use data x-calibration as x-calibration in tif
-                resolution = (1 / calibrations[-1].scale, ) if calibrations[-1].scale != 0 else (1, )
+                resolution_ = [1 / calibrations[-1].scale, 1.0] if calibrations[-1].scale != 0 else [1.0, 1.0]
                 # use x-unit in tif (unfortunately there is no way to save separate units for x- and y)
                 unit = calibrations[-1].units
                 # if data is 2d, also put y-axis there
                 if data_and_metadata.datum_dimension_count == 2:
                     tifffile_shape[3] = data_shape[-2]
                     # use data y-calibration as y-calibration in tif
-                    resolution += (1 / calibrations[-2].scale, ) if calibrations[-2].scale != 0 else (1, )
+                    resolution_[1] = 1 / calibrations[-2].scale if calibrations[-2].scale != 0 else 1.0
+                resolution = resolution_[0], resolution_[1]
 
             # change axis order if necessary
             if data_and_metadata.collection_dimension_count > 0:
@@ -441,9 +466,9 @@ class TIFFIODelegate_ImageJ(TIFFIODelegateBase):
             if (numpy.array(resolution) > (2**32-1)/1e6).any():
                 patched_resolution = numpy.array(resolution)
                 possible_numbers = (2**32-1)/(1e6-numpy.arange(1e6))
-                if resolution[0] > (2**32-1)/1e6:
+                if isinstance(resolution[0], float) and resolution[0] > (2**32-1)/1e6:
                     patched_resolution[0] = possible_numbers[numpy.argmin(numpy.abs(possible_numbers-resolution[0]))]
-                if resolution[1] > (2**32-1)/1e6:
+                if isinstance(resolution[1], float) and resolution[1] > (2**32-1)/1e6:
                     patched_resolution[1] = possible_numbers[numpy.argmin(numpy.abs(possible_numbers-resolution[1]))]
                 resolution = tuple(patched_resolution)
 
@@ -462,8 +487,8 @@ class TIFFIODelegate_ImageJ(TIFFIODelegateBase):
                 tifffile.imwrite(stream, data, resolution=resolution, metadata=tifffile_metadata)
                 logging.warn('Could not save metadata in tiff. Reason: ' + str(detail))
 
-    def __extract_data_element_dict_from_data_and_metadata(self, data_and_metadata):
-        metadata_dict = {}
+    def __extract_data_element_dict_from_data_and_metadata(self, data_and_metadata: DataAndMetadata.DataAndMetadata) -> dict[str, typing.Any]:
+        metadata_dict = dict[str, typing.Any]()
         dimensional_calibrations = data_and_metadata.dimensional_calibrations
         if dimensional_calibrations is not None:
             calibrations_element = []
@@ -491,14 +516,14 @@ class TIFFIOExtension(object):
     # required for Nion Swift to recognize this as an extension class.
     extension_id = "nion.swift.extensions.tiff_io"
 
-    def __init__(self, api_broker):
+    def __init__(self, api_broker: typing.Any) -> None:
         # grab the api object.
         api = api_broker.get_api(version="~1.0")
         # be sure to keep a reference or it will be closed immediately.
         self.__io_handler1_ref = api.create_data_and_metadata_io_handler(TIFFIODelegate_Baseline(api))
         self.__io_handler2_ref = api.create_data_and_metadata_io_handler(TIFFIODelegate_ImageJ(api))
 
-    def close(self):
+    def close(self) -> None:
         # close will be called when the extension is unloaded. in turn, close any references so they get closed. this
         # is not strictly necessary since the references will be deleted naturally when this object is deleted.
         self.__io_handler1_ref.close()

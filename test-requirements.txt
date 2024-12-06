@@ -8,3 +8,8 @@ git+https://github.com/nion-software/niondata.git#egg=niondata
 
 h5py
 numpy
+pytz
+tifffile
+
+# for type checking
+types-pytz
