@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import array
 import datetime
 import io
@@ -8,10 +10,12 @@ import pkgutil
 import os
 import unittest
 import shutil
-import sys
+import types
+import typing
 
 import h5py
 import numpy
+import numpy.typing
 
 from nionswift_plugin.DM_IO import parse_dm3
 from nionswift_plugin.DM_IO import dm3_image_utils
@@ -22,7 +26,7 @@ from nion.data import DataAndMetadata
 
 class TestDM3ImportExportClass(unittest.TestCase):
 
-    def check_write_then_read_matches(self, data, func, _assert=True):
+    def check_write_then_read_matches(self, data: typing.Any, func: typing.Callable[..., typing.Any], _assert: bool = True) -> typing.Any:
         # we confirm that reading a written element returns the same value
         s = io.BytesIO()
         header = func(s, outdata=data)
@@ -35,7 +39,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
             self.assertEqual(r, data)
         return r
 
-    def test_dm_read_struct_types(self):
+    def test_dm_read_struct_types(self) -> None:
         s = io.BytesIO()
         types = [2, 2, 2]
         parse_dm3.dm_read_struct_types(s, outtypes=types)
@@ -43,61 +47,58 @@ class TestDM3ImportExportClass(unittest.TestCase):
         in_types, headerlen = parse_dm3.dm_read_struct_types(s)
         self.assertEqual(in_types, types)
 
-    def test_simpledata(self):
+    def test_simpledata(self) -> None:
         self.check_write_then_read_matches(45, parse_dm3.dm_types[parse_dm3.get_dmtype_for_name('long')])
         self.check_write_then_read_matches(2**30, parse_dm3.dm_types[parse_dm3.get_dmtype_for_name('uint')])
         self.check_write_then_read_matches(34.56, parse_dm3.dm_types[parse_dm3.get_dmtype_for_name('double')])
 
-    def test_read_string(self):
+    def test_read_string(self) -> None:
         data = "MyString"
         ret = self.check_write_then_read_matches(data, parse_dm3.dm_types[parse_dm3.get_dmtype_for_name('array')], False)
         self.assertEqual(data, dm3_image_utils.fix_strings(ret))
 
-    def test_array_simple(self):
+    def test_array_simple(self) -> None:
         dat = array.array('b', [0]*256)
         self.check_write_then_read_matches(dat, parse_dm3.dm_types[parse_dm3.get_dmtype_for_name('array')])
 
-    def test_array_struct(self):
+    def test_array_struct(self) -> None:
         dat = parse_dm3.structarray(['h', 'h', 'h'])
         dat.raw_data = array.array('b', [0, 0] * 3 * 8)  # two bytes x 3 'h's x 8 elements
         self.check_write_then_read_matches(dat, parse_dm3.dm_types[parse_dm3.get_dmtype_for_name('array')])
 
-    def test_tagdata(self):
+    def test_tagdata(self) -> None:
         for d in [45, 2**30, 34.56, array.array('b', [0]*256)]:
             self.check_write_then_read_matches(d, parse_dm3.parse_dm_tag_data)
 
-    def test_tagroot_dict(self):
-        mydata = {}
+    def test_tagroot_dict(self) -> None:
+        mydata = dict[str, typing.Any]()
         self.check_write_then_read_matches(mydata, parse_dm3.parse_dm_tag_root)
         mydata = {"Bob": 45, "Henry": 67, "Joe": 56}
         self.check_write_then_read_matches(mydata, parse_dm3.parse_dm_tag_root)
 
-    def test_tagroot_dict_complex(self):
+    def test_tagroot_dict_complex(self) -> None:
         mydata = {"Bob": 45, "Henry": 67, "Joe": {
                   "hi": [34, 56, 78, 23], "Nope": 56.7, "d": array.array('I', [0] * 32)}}
         self.check_write_then_read_matches(mydata, parse_dm3.parse_dm_tag_root)
 
-    def test_tagroot_list(self):
+    def test_tagroot_list(self) -> None:
         # note any strings here get converted to 'H' arrays!
-        mydata = []
+        mydata = list[int]()
         self.check_write_then_read_matches(mydata, parse_dm3.parse_dm_tag_root)
         mydata = [45,  67,  56]
         self.check_write_then_read_matches(mydata, parse_dm3.parse_dm_tag_root)
 
-    def test_struct(self):
+    def test_struct(self) -> None:
         # note any strings here get converted to 'H' arrays!
-        mydata = tuple()
+        mydata = tuple[typing.Any]()
         f = parse_dm3.dm_types[parse_dm3.get_dmtype_for_name('struct')]
         self.check_write_then_read_matches(mydata, f)
         mydata = (3, 4, 56.7)
         self.check_write_then_read_matches(mydata, f)
 
-    def test_image(self):
+    def test_image(self) -> None:
         im = array.array('h')
-        if sys.version < '3':
-            im.fromstring(numpy.random.bytes(64))
-        else:
-            im.frombytes(numpy.random.bytes(64))
+        im.frombytes(numpy.random.bytes(64))
         im_tag = {"Data": im,
                   "Dimensions": [23, 45]}
         s = io.BytesIO()
@@ -108,8 +109,8 @@ class TestDM3ImportExportClass(unittest.TestCase):
         self.assertEqual(im_tag["Dimensions"], ret["Dimensions"])
         self.assertTrue((im_tag["Data"] == ret["Data"]))
 
-    def test_data_write_read_round_trip(self):
-        def db_make_directory_if_needed(directory_path):
+    def test_data_write_read_round_trip(self) -> None:
+        def db_make_directory_if_needed(directory_path: str) -> None:
             if os.path.exists(directory_path):
                 if not os.path.isdir(directory_path):
                     raise OSError("Path is not a directory:", directory_path)
@@ -117,25 +118,26 @@ class TestDM3ImportExportClass(unittest.TestCase):
                 os.makedirs(directory_path)
 
         class numpy_array_type:
-            def __init__(self, shape, dtype):
+            def __init__(self, shape: tuple[int, ...], dtype: numpy.typing.DTypeLike) -> None:
                 self.data = numpy.ones(shape, dtype)
-            def __enter__(self):
+            def __enter__(self) -> numpy_array_type:
                 return self
-            def __exit__(self, exc_type, exc_value, traceback):
-                pass
+            def __exit__(self, exception_type: typing.Optional[typing.Type[BaseException]], value: typing.Optional[BaseException], traceback: typing.Optional[types.TracebackType]) -> typing.Optional[bool]:
+                return None
 
         class h5py_array_type:
-            def __init__(self, shape, dtype):
+            def __init__(self, shape: tuple[int, ...], dtype: numpy.typing.DTypeLike) -> None:
                 current_working_directory = os.getcwd()
                 self.__workspace_dir = os.path.join(current_working_directory, "__Test")
                 db_make_directory_if_needed(self.__workspace_dir)
                 self.f = h5py.File(os.path.join(self.__workspace_dir, "file.h5"), "a")
                 self.data = self.f.create_dataset("data", data=numpy.ones(shape, dtype))
-            def __enter__(self):
+            def __enter__(self) -> h5py_array_type:
                 return self
-            def __exit__(self, exc_type, exc_value, traceback):
+            def __exit__(self, exception_type: typing.Optional[typing.Type[BaseException]], value: typing.Optional[BaseException], traceback: typing.Optional[types.TracebackType]) -> typing.Optional[bool]:
                 self.f.close()
                 shutil.rmtree(self.__workspace_dir)
+                return None
 
         array_types = numpy_array_type, h5py_array_type
         dtypes = (numpy.float32, numpy.float64, numpy.complex64, numpy.complex128, numpy.int16, numpy.uint16, numpy.int32, numpy.uint32)
@@ -162,7 +164,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
                                 for index, dimension in enumerate(shape):
                                     dimensional_calibrations_in.append(Calibration.Calibration(1.0 + 0.1 * index, 2.0 + 0.2 * index, "µ" + "n" * index))
                                 intensity_calibration_in = Calibration.Calibration(4, 5, "six")
-                                metadata_in = dict()
+                                metadata_in = dict[typing.Any, typing.Any]()
                                 if signal_type:
                                     metadata_in.setdefault("hardware_source", dict())["signal_type"] = signal_type
                                 xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
@@ -174,14 +176,14 @@ class TestDM3ImportExportClass(unittest.TestCase):
                                 self.assertEqual(tuple(dimensional_calibrations_in), tuple(xdata.dimensional_calibrations))
                                 self.assertEqual(intensity_calibration_in, xdata.intensity_calibration)
 
-    def test_rgb_data_write_read_round_trip(self):
+    def test_rgb_data_write_read_round_trip(self) -> None:
         for version in (3, 4):
             s = io.BytesIO()
             data_in = (numpy.random.randn(6, 4, 3) * 255).astype(numpy.uint8)
             data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
             dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
             intensity_calibration_in = Calibration.Calibration(4, 5, "six")
-            metadata_in = {"abc": None, "": "", "one": [], "two": {}, "three": [1, None, 2]}
+            metadata_in: dict[str, typing.Any] = {"abc": None, "": "", "one": [], "two": {}, "three": [1, None, 2]}
             xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
             dm3_image_utils.save_image(xdata_in, s, version)
             s.seek(0)
@@ -189,14 +191,14 @@ class TestDM3ImportExportClass(unittest.TestCase):
             self.assertTrue(numpy.array_equal(data_in, xdata.data))
             self.assertEqual(data_descriptor_in, xdata.data_descriptor)
 
-    def test_calibrations_write_read_round_trip(self):
+    def test_calibrations_write_read_round_trip(self) -> None:
         for version in (3, 4):
             s = io.BytesIO()
             data_in = numpy.ones((6, 4), numpy.float32)
             data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
             dimensional_calibrations_in = (Calibration.Calibration(1.1, 2.1, "nm"), Calibration.Calibration(2, 3, u"µm"))
             intensity_calibration_in = Calibration.Calibration(4.4, 5.5, "six")
-            metadata_in = dict()
+            metadata_in = dict[str, typing.Any]()
             xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
             dm3_image_utils.save_image(xdata_in, s, version)
             s.seek(0)
@@ -204,14 +206,14 @@ class TestDM3ImportExportClass(unittest.TestCase):
             self.assertEqual(tuple(dimensional_calibrations_in), tuple(xdata.dimensional_calibrations))
             self.assertEqual(intensity_calibration_in, xdata.intensity_calibration)
 
-    def test_data_timestamp_write_read_round_trip(self):
+    def test_data_timestamp_write_read_round_trip(self) -> None:
         for version in (3, 4):
             s = io.BytesIO()
             data_in = numpy.ones((6, 4), numpy.float32)
             data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
             dimensional_calibrations_in = [Calibration.Calibration(1.1, 2.1, "nm"), Calibration.Calibration(2, 3, u"µm")]
             intensity_calibration_in = Calibration.Calibration(4.4, 5.5, "six")
-            metadata_in = dict()
+            metadata_in = dict[str, typing.Any]()
             timestamp_in = datetime.datetime(2013, 11, 18, 14, 5, 4, 0)
             timezone_in = "America/Los_Angeles"
             timezone_offset_in = "-0700"
@@ -223,7 +225,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
             self.assertEqual(timezone_in, xdata.timezone)
             self.assertEqual(timezone_offset_in, xdata.timezone_offset)
 
-    def test_metadata_write_read_round_trip(self):
+    def test_metadata_write_read_round_trip(self) -> None:
         for version in (3, 4):
             s = io.BytesIO()
             data_in = numpy.ones((6, 4), numpy.float32)
@@ -249,14 +251,14 @@ class TestDM3ImportExportClass(unittest.TestCase):
             xdata = dm3_image_utils.load_image(s)
             self.assertEqual(metadata_in, xdata.metadata)
 
-    def test_metadata_difficult_types_write_read_round_trip(self):
+    def test_metadata_difficult_types_write_read_round_trip(self) -> None:
         for version in (3, 4):
             s = io.BytesIO()
             data_in = numpy.ones((6, 4), numpy.float32)
             data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
             dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
             intensity_calibration_in = Calibration.Calibration(4, 5, "six")
-            metadata_in = {"abc": None, "": "", "one": [], "two": {}, "three": [1, None, 2]}
+            metadata_in: dict[str, typing.Any] = {"abc": None, "": "", "one": [], "two": {}, "three": [1, None, 2]}
             xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
             dm3_image_utils.save_image(xdata_in, s, version)
             s.seek(0)
@@ -264,14 +266,14 @@ class TestDM3ImportExportClass(unittest.TestCase):
             metadata_expected = {"one": [], "two": {}, "three": [1, 2]}
             self.assertEqual(metadata_expected, xdata.metadata)
 
-    def test_metadata_export_large_integer(self):
+    def test_metadata_export_large_integer(self) -> None:
         for version in (3, 4):
             s = io.BytesIO()
             data_in = numpy.ones((6, 4), numpy.float32)
             data_descriptor_in = DataAndMetadata.DataDescriptor(False, 0, 2)
             dimensional_calibrations_in = [Calibration.Calibration(1, 2, "nm"), Calibration.Calibration(2, 3, u"µm")]
             intensity_calibration_in = Calibration.Calibration(4, 5, "six")
-            metadata_in = {"abc": 999999999999}
+            metadata_in: dict[str, typing.Any] = {"abc": 999999999999}
             xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor_in, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
             dm3_image_utils.save_image(xdata_in, s, version)
             s.seek(0)
@@ -279,7 +281,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
             metadata_expected = {"abc": 999999999999}
             self.assertEqual(metadata_expected, xdata.metadata)
 
-    def test_signal_type_round_trip(self):
+    def test_signal_type_round_trip(self) -> None:
         for version in (3, 4):
             s = io.BytesIO()
             data_in = numpy.ones((12,), numpy.float32)
@@ -294,7 +296,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
             metadata_expected = {'hardware_source': {'signal_type': 'EELS'}, 'Meta Data': {'Format': 'Spectrum', 'Signal': 'EELS'}}
             self.assertEqual(metadata_expected, xdata.metadata)
 
-    def test_reference_images_load_properly(self):
+    def test_reference_images_load_properly(self) -> None:
         shape_data_descriptors = (
             ((3,), DataAndMetadata.DataDescriptor(False, 0, 1)),        # spectrum
             ((3, 2), DataAndMetadata.DataDescriptor(False, 1, 1)),      # 1d collection of spectra
@@ -320,7 +322,9 @@ class TestDM3ImportExportClass(unittest.TestCase):
             #     dm3_image_utils.save_image(xdata, f, version)
 
             try:
-                s = io.BytesIO(pkgutil.get_data(__name__, f"resources/{name}"))
+                _data = pkgutil.get_data(__name__, f"resources/{name}")
+                assert _data is not None
+                s = io.BytesIO(_data)
                 xdata = dm3_image_utils.load_image(s)
                 self.assertAlmostEqual(intensity_calibration.scale, xdata.intensity_calibration.scale, 6)
                 self.assertAlmostEqual(intensity_calibration.offset, xdata.intensity_calibration.offset, 6)
@@ -336,7 +340,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
                 print(f"{name} {data_descriptor} FAIL")
                 raise
 
-    def disabled_test_specific_file(self):
+    def disabled_test_specific_file(self) -> None:
         file_path = "/path/to/test.dm3"
         with open(file_path, "rb") as f:
             xdata = dm3_image_utils.load_image(f)

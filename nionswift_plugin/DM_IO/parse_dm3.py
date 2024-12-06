@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import array
 import itertools
 import struct
@@ -7,7 +9,7 @@ import typing
 
 long_type = int
 
-def str_to_iso8859_bytes(s):
+def str_to_iso8859_bytes(s: str) -> bytes:
     return bytes(s, 'ISO-8859-1')
 
 # marcel 2019-03-14  Adding capability to write dm4 files
@@ -39,7 +41,7 @@ size_type = "L"
 TAG_TYPE_ARRAY = 20
 TAG_TYPE_DATA = 21
 
-def get_from_file(f: typing.BinaryIO, stype):
+def get_from_file(f: typing.BinaryIO, stype: str) -> typing.Any:
     #print("reading", stype, "size", struct.calcsize(stype))
     src = f.read(struct.calcsize(stype))
     if len(src) != struct.calcsize(stype):
@@ -52,45 +54,51 @@ def get_from_file(f: typing.BinaryIO, stype):
         return d
 
 
-def put_into_file(f: typing.BinaryIO, stype, *args):
+def put_into_file(f: typing.BinaryIO, stype: str, *args: typing.Any) -> None:
     f.write(struct.pack(stype, *args))
 
 
-class structarray(object):
+class structarray:
     """
     A class to represent struct arrays. We store the data as a list of
     tuples, with the dm_types telling us the dm id for the  types
     """
-    def __init__(self, typecodes):
+    def __init__(self, typecodes: typing.Sequence[str]) -> None:
         #self.dm_types = dm_types
-        self.typecodes = typecodes
-        self.raw_data = None
+        self.typecodes = list(typecodes)
+        self.raw_data: typing.Optional[array.array[typing.Any]] = None
 
-    def __eq__(self, other):
+    def __eq__(self, other: typing.Any) -> bool:
+        if not isinstance(other, structarray):
+            return False
         return self.raw_data == other.raw_data and self.typecodes == other.typecodes
 
-    def __ne__(self, other):
+    def __ne__(self, other: typing.Any) -> bool:
+        if not isinstance(other, structarray):
+            return False
         return self.raw_data != other.raw_data or self.typecodes != other.typecodes
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "structarray({}, {})".format(self.typecodes, self.raw_data)
 
-    def bytelen(self, num_elements):
+    def bytelen(self, num_elements: int) -> int:
         return num_elements * struct.calcsize(" ".join(self.typecodes))
 
-    def num_elements(self):
+    def num_elements(self) -> int:
         b = self.bytelen(1)
+        assert(self.raw_data is not None)
         assert(len(self.raw_data) % b == 0)
         return len(self.raw_data) // b
 
-    def from_file(self, f, num_elements):
+    def from_file(self, f: typing.BinaryIO, num_elements: int) -> None:
         self.raw_data = array.array('b', f.read(self.bytelen(num_elements)))
 
-    def to_file(self, f):
+    def to_file(self, f: typing.BinaryIO) -> None:
+        assert(self.raw_data is not None)
         f.write(bytearray(self.raw_data))
 
 
-def parse_dm_header(f: typing.BinaryIO, file_version: int=None, outdata=None):
+def parse_dm_header(f: typing.BinaryIO, file_version: typing.Optional[int] = None, outdata: typing.Optional[typing.Any] = None) -> typing.Any:
     """
     This is the start of the DM file. We check for some
     magic values and then treat the next entry as a tag_root
@@ -159,7 +167,7 @@ def parse_dm_header(f: typing.BinaryIO, file_version: int=None, outdata=None):
         return ret
 
 
-def parse_dm_tag_root(f: typing.BinaryIO, outdata=None):
+def parse_dm_tag_root(f: typing.BinaryIO, outdata: typing.Optional[typing.Any] = None) -> typing.Any:
     if outdata is not None:  # this means we're WRITING to the file
         is_dict = 0 if isinstance(outdata, list) else 1
         _open = 0
@@ -186,6 +194,7 @@ def parse_dm_tag_root(f: typing.BinaryIO, outdata=None):
         if verbose:
             print(f"read_dm_tag_root start {f.tell()}")
         is_dict, _open, num_tags = get_from_file(f, ("> b b %c" % size_type))
+        new_obj: typing.Any
         if is_dict:
             new_obj = {}
             for i in range(num_tags):
@@ -205,7 +214,7 @@ def parse_dm_tag_root(f: typing.BinaryIO, outdata=None):
         return new_obj
 
 
-def parse_dm_tag_entry(f: typing.BinaryIO, outdata=None, outname=None):
+def parse_dm_tag_entry(f: typing.BinaryIO, outdata: typing.Optional[typing.Any] = None, outname: typing.Optional[str] = None) -> typing.Any:
     if outdata is not None:  # this means we're WRITING to the file
         if verbose:
             print(f"write_dm_tag_entry {outname} start {f.tell()}")
@@ -268,7 +277,7 @@ def parse_dm_tag_entry(f: typing.BinaryIO, outdata=None, outname=None):
             raise Exception("Unknown data type=" + str(dtype))
 
 
-def parse_dm_tag_data(f: typing.BinaryIO, outdata=None):
+def parse_dm_tag_data(f: typing.BinaryIO, outdata: typing.Optional[typing.Any] = None) -> typing.Any:
     # todo what is id??
     # it is normally one of 1,3,7,11,19
     # we can parse lists of numbers with them all 1
@@ -302,9 +311,9 @@ def parse_dm_tag_data(f: typing.BinaryIO, outdata=None):
     else:
         if verbose:
             print(f"read_dm_tag_data start {f.tell()}")
-        _delim, header_len, data_type = get_from_file(f, "> 4s {size} {size}".format(size=size_type))
-        assert(_delim == str_to_iso8859_bytes("%%%%"))
-        ret, header = dm_types[data_type](f)
+        _delim2, header_len, data_type = get_from_file(f, "> 4s {size} {size}".format(size=size_type))
+        assert(_delim2 == str_to_iso8859_bytes("%%%%"))
+        ret, header = dm_types[data_type](f, None)
         assert(header + 1 == header_len)
         if verbose:
             print(f"read_dm_tag_data end {f.tell()}")
@@ -318,7 +327,7 @@ def parse_dm_tag_data(f: typing.BinaryIO, outdata=None):
 # can we use i, I instead?
 # mfm 2013-11-15 looks like there's two new (or reinstated) types in DM4, 11 and 12.
 # Guessing what they are here
-dm_simple_names = [
+dm_simple_names: list[tuple[int, str, str, list[typing.Type[typing.Any]]]] = [
     (8, "bool", "b", [bool]),
     (2, "short", "h", []),
     (3, "long", "i", [int]),
@@ -340,7 +349,7 @@ dm_complex_names = {
     TAG_TYPE_ARRAY: "array"}
 
 
-def get_dmtype_for_name(name):
+def get_dmtype_for_name(name: str) -> int:
     for key, _name, sc, types in dm_simple_names:
         if _name == name:
             return key
@@ -350,7 +359,7 @@ def get_dmtype_for_name(name):
     return 0
 
 
-def get_structdmtypes_for_python_typeorobject(typeorobj):
+def get_structdmtypes_for_python_typeorobject(typeorobj: typing.Any) -> typing.Tuple[typing.Optional[str], int]:
     """
     Return structchar, dmtype for the python (or numpy)
     type or object typeorobj.
@@ -359,6 +368,7 @@ def get_structdmtypes_for_python_typeorobject(typeorobj):
     # not isinstance is probably a bit more lenient than 'is'
     # ie isinstance(x,str) is nicer than type(x) is str.
     # hence we use isinstance when available
+    comparer: typing.Callable[[typing.Any], bool]
     if isinstance(typeorobj, type):
         comparer = lambda test: test is typeorobj
     else:
@@ -386,21 +396,22 @@ def get_structdmtypes_for_python_typeorobject(typeorobj):
         return None, 6
 
 
-def get_structchar_for_dmtype(dm_type):
+def get_structchar_for_dmtype(dm_type: int) -> str:
     for key, name, sc, types in dm_simple_names:
         if key == dm_type:
             return sc
-    return None
+    # should be an exception?
+    return str()
 
 
-def get_dmtype_for_structchar(struct_char):
+def get_dmtype_for_structchar(struct_char: str) -> int:
     for key, name, sc, types in dm_simple_names:
         if struct_char == sc:
             return key
     return -1
 
 
-def standard_dm_read(datatype_num, desc):
+def standard_dm_read(datatype_num: int, desc: tuple[str, str, list[typing.Type[typing.Any]]]) -> typing.Callable[[typing.BinaryIO, typing.Optional[typing.Any]], typing.Any]:
     """
     datatype_num is the number of the data type, see dm_simple_names
     above. desc is a (nicename, struct_char) tuple. We return a function
@@ -408,7 +419,7 @@ def standard_dm_read(datatype_num, desc):
     """
     nicename, structchar, types = desc
 
-    def dm_read_x(f: typing.BinaryIO, outdata=None):
+    def dm_read_x(f: typing.BinaryIO, outdata: typing.Optional[typing.Any] = None) -> typing.Any:
         """Reads (or write if outdata is given) a simple data type.
         returns the data if reading and the number of bytes of header
         """
@@ -429,13 +440,13 @@ def standard_dm_read(datatype_num, desc):
 
     return dm_read_x
 
-dm_types = {}
+dm_types: dict[int, typing.Callable[[typing.BinaryIO, typing.Optional[typing.Any]], typing.Any]] = {}
 for key, name, sc, types in dm_simple_names:
     dm_types[key] = standard_dm_read(key, (name, sc, types))
 # 8 is boolean, and relatively easy:
 
 
-def dm_read_bool(f: typing.BinaryIO, outdata=None):
+def dm_read_bool(f: typing.BinaryIO, outdata: typing.Optional[typing.Any] = None) -> typing.Any:
     if outdata is not None:  # this means we're WRITING to the file
         if verbose:
             print(f"dm_write_bool start {f.tell()}")
@@ -450,13 +461,14 @@ def dm_read_bool(f: typing.BinaryIO, outdata=None):
         if verbose:
             print(f"dm_read_bool end {f.tell()}")
         return result != 0, 0
+
 dm_types[get_dmtype_for_name('bool')] = dm_read_bool
 # string is 18:
 
 
 # mfm 2013-05-13 looks like this is never used, and all strings are
 # treated as array?
-def dm_read_string(f: typing.BinaryIO, outdata=None):
+def dm_read_string(f: typing.BinaryIO, outdata: typing.Optional[typing.Any] = None) -> typing.Any:
     header_size = 1  # just a length field
     if outdata is not None:  # this means we're WRITING to the file
         if verbose:
@@ -482,7 +494,7 @@ dm_types[get_dmtype_for_name('string')] = dm_read_string
 
 
 # struct is 15
-def dm_read_struct_types(f: typing.BinaryIO, outtypes=None):
+def dm_read_struct_types(f: typing.BinaryIO, outtypes: typing.Optional[list[int]] = None) -> typing.Any:
     if outtypes is not None:
         _len, nfields = 0, len(outtypes)
         put_into_file(f, "> %c %c" % (size_type, size_type), _len, nfields)
@@ -502,7 +514,7 @@ def dm_read_struct_types(f: typing.BinaryIO, outtypes=None):
         return types, 2+2*nfields
 
 
-def dm_read_struct(f: typing.BinaryIO, outdata=None):
+def dm_read_struct(f: typing.BinaryIO, outdata: typing.Optional[typing.Any] = None) -> typing.Any:
     if outdata is not None:  # this means we're WRITING to the file
         if verbose:
             print(f"dm_write_struct start {f.tell()}")
@@ -535,7 +547,7 @@ def dm_read_struct(f: typing.BinaryIO, outdata=None):
         types, header = dm_read_struct_types(f)
         ret = []
         for t in types:
-            d, h = dm_types[t](f)
+            d, h = dm_types[t](f, None)
             ret.append(d)
         if verbose:
             print(f"dm_read_struct end {f.tell()}")
@@ -552,7 +564,7 @@ dm_types[get_dmtype_for_name('struct')] = dm_read_struct
 
 
 # array is TAG_TYPE_ARRAY
-def dm_read_array(f: typing.BinaryIO, outdata=None):
+def dm_read_array(f: typing.BinaryIO, outdata: typing.Optional[typing.Any] = None) -> typing.Any:
     array_header = 2  # type, length
     if outdata is not None:  # this means we're WRITING to the file
         if verbose:
@@ -600,8 +612,8 @@ def dm_read_array(f: typing.BinaryIO, outdata=None):
         # let's make a structarray
         if verbose:
             print(f"dm_read_array start {f.tell()}")
-        pos = f.tell()
         dtype = get_from_file(f, "> {size}".format(size=size_type))
+        ret: typing.Any
         if dtype == get_dmtype_for_name('struct'):
             types, struct_header = dm_read_struct_types(f)
             # NB this was '> L', but changing to > {size}. May break things!
