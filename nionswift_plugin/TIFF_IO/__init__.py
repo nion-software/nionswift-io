@@ -187,7 +187,7 @@ class TIFFIODelegateBase:
             # that the data is still valid for being interpreted by shape descriptors
             if expected_number_dimensions is not None and len(data.shape) == expected_number_dimensions:
                 # change axis order if necessary
-                if data_element_dict.get('collection_dimension_count', 0) > 0:
+                if data_element_dict and data_element_dict.get('collection_dimension_count', 0) > 0:
                     # for 2d data in a collection we move also the second data axis
                     if data_element_dict.get('datum_dimension_count', 1) == 2:
                         data = numpy.moveaxis(data, 0, last_data_axis)
