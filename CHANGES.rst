@@ -1,6 +1,10 @@
 Changelog (nionswift-io)
 ========================
 
+15.4.0 (2025-01-06)
+-------------------
+- Maintenance release. Tests. Update TIFF library.
+
 15.3.0 (2024-10-27)
 -------------------
 - Require Numpy 2. Add Python 3.13 support. Drop Python 3.9, 3.10 support.
