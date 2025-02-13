@@ -32,7 +32,7 @@ class DM3IODelegate(object):
     def can_write_data_and_metadata(self, data_and_metadata: DataAndMetadata.DataAndMetadata, extension: str) -> bool:
         return extension.lower() in self.io_handler_extensions
 
-    def write_data_and_metadata_stream(self, data_and_metadata: DataAndMetadata.DataAndMetadata, file_path_str: str) -> None:
+    def write_data_and_metadata(self, data_and_metadata: DataAndMetadata.DataAndMetadata, file_path_str: str, extension: str) -> None:
         file_path = pathlib.Path(file_path_str)
         data = data_and_metadata.data
         data_descriptor = data_and_metadata.data_descriptor

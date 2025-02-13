@@ -1,6 +1,10 @@
 Changelog (nionswift-io)
 ========================
 
+15.4.1 (2025-02-13)
+-------------------
+- Fix regression bug when exporting DigitalMicrograph files.
+
 15.4.0 (2025-01-06)
 -------------------
 - Maintenance release. Tests. Update TIFF library.
