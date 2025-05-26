@@ -24,7 +24,32 @@ from nion.data import Calibration
 from nion.data import DataAndMetadata
 
 
+def is_equal(r: typing.Any, data: typing.Any) -> bool:
+    # we use this to compare the read and written data
+    if isinstance(r, (list, tuple)):
+        return len(r) == len(data) and all(is_equal(x, y) for x, y in zip(r, data))
+    elif isinstance(r, dict):
+        return r.keys() == data.keys() and all(is_equal(r[k], data[k]) for k in r)
+    elif isinstance(r, array.array) and isinstance(data, parse_dm3.DataProvider):
+        return bool(r == data.data)
+    else:
+        return bool(r == data)
+
+
 class TestDM3ImportExportClass(unittest.TestCase):
+
+    def check_write_then_read_matches2(self, data: typing.Any, write_func: typing.Callable[..., typing.Any], read_func: typing.Callable[..., typing.Any], _assert: bool = True) -> typing.Any:
+        # we confirm that reading a written element returns the same value
+        s = io.BytesIO()
+        header = write_func(s, data)
+        s.seek(0)
+        if header is not None:
+            r, hy = read_func(s)
+        else:
+            r = read_func(s)
+        if _assert:
+            self.assertTrue(is_equal(r, data))
+        return r
 
     def check_write_then_read_matches(self, data: typing.Any, func: typing.Callable[..., typing.Any], _assert: bool = True) -> typing.Any:
         # we confirm that reading a written element returns the same value
@@ -36,7 +61,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
         else:
             r = func(s)
         if _assert:
-            self.assertEqual(r, data)
+            self.assertTrue(is_equal(r, data))
         return r
 
     def test_dm_read_struct_types(self) -> None:
@@ -58,7 +83,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
         self.assertEqual(data, dm3_image_utils.fix_strings(ret))
 
     def test_array_simple(self) -> None:
-        dat = array.array('b', [0]*256)
+        dat = parse_dm3.DataProvider(array.array('b', [0]*256))
         self.check_write_then_read_matches(dat, parse_dm3.dm_types[parse_dm3.get_dmtype_for_name('array')])
 
     def test_array_struct(self) -> None:
@@ -67,8 +92,8 @@ class TestDM3ImportExportClass(unittest.TestCase):
         self.check_write_then_read_matches(dat, parse_dm3.dm_types[parse_dm3.get_dmtype_for_name('array')])
 
     def test_tagdata(self) -> None:
-        for d in [45, 2**30, 34.56, array.array('b', [0]*256)]:
-            self.check_write_then_read_matches(d, parse_dm3.parse_dm_tag_data)
+        for d in [45, 2**30, 34.56, parse_dm3.DataProvider(array.array('b', [0]*256))]:
+            self.check_write_then_read_matches2(d, parse_dm3.write_dm_tag_data, parse_dm3.read_dm_tag_data)
 
     def test_tagroot_dict(self) -> None:
         mydata = dict[str, typing.Any]()
@@ -78,7 +103,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
 
     def test_tagroot_dict_complex(self) -> None:
         mydata = {"Bob": 45, "Henry": 67, "Joe": {
-                  "hi": [34, 56, 78, 23], "Nope": 56.7, "d": array.array('I', [0] * 32)}}
+                  "hi": [34, 56, 78, 23], "Nope": 56.7, "d": parse_dm3.DataProvider(array.array('I', [0] * 32))}}
         self.check_write_then_read_matches(mydata, parse_dm3.parse_dm_tag_root)
 
     def test_tagroot_list(self) -> None:
@@ -99,15 +124,14 @@ class TestDM3ImportExportClass(unittest.TestCase):
     def test_image(self) -> None:
         im = array.array('h')
         im.frombytes(numpy.random.bytes(64))
-        im_tag = {"Data": im,
+        im_tag = {"Data": parse_dm3.DataProvider(im),
                   "Dimensions": [23, 45]}
         s = io.BytesIO()
         parse_dm3.parse_dm_tag_root(s, outdata=im_tag)
         s.seek(0)
         ret = parse_dm3.parse_dm_tag_root(s)
-        self.assertEqual(im_tag["Data"], ret["Data"])
+        self.assertTrue(is_equal(ret["Data"], im_tag["Data"]))
         self.assertEqual(im_tag["Dimensions"], ret["Dimensions"])
-        self.assertTrue((im_tag["Data"] == ret["Data"]))
 
     def test_data_write_read_round_trip(self) -> None:
         def db_make_directory_if_needed(directory_path: str) -> None:

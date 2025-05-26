@@ -41,6 +41,7 @@ size_type = "L"
 TAG_TYPE_ARRAY = 20
 TAG_TYPE_DATA = 21
 
+
 def get_from_file(f: typing.BinaryIO, stype: str) -> typing.Any:
     #print("reading", stype, "size", struct.calcsize(stype))
     src = f.read(struct.calcsize(stype))
@@ -228,7 +229,7 @@ def parse_dm_tag_entry(f: typing.BinaryIO, outdata: typing.Optional[typing.Any] 
             put_into_file(f, ">%c" % size_type, 0)
 
         if dtype == TAG_TYPE_DATA:
-            parse_dm_tag_data(f, outdata)
+            write_dm_tag_data(f, outdata)
         else:
             parse_dm_tag_root(f, outdata)
 
@@ -254,7 +255,7 @@ def parse_dm_tag_entry(f: typing.BinaryIO, outdata: typing.Optional[typing.Any] 
             extra_tag_flags = get_from_file(f, ">%c" % size_type)
 
         if dtype == TAG_TYPE_DATA:
-            arr = parse_dm_tag_data(f)
+            arr = read_dm_tag_data(f)
             if name and hasattr(arr, "__len__") and len(arr) > 0:
                 # if we find data which matches this regex we return a
                 # string instead of an array
@@ -277,7 +278,7 @@ def parse_dm_tag_entry(f: typing.BinaryIO, outdata: typing.Optional[typing.Any] 
             raise Exception("Unknown data type=" + str(dtype))
 
 
-def parse_dm_tag_data(f: typing.BinaryIO, outdata: typing.Optional[typing.Any] = None) -> typing.Any:
+def read_dm_tag_data(f: typing.BinaryIO) -> typing.Any:
     # todo what is id??
     # it is normally one of 1,3,7,11,19
     # we can parse lists of numbers with them all 1
@@ -287,37 +288,36 @@ def parse_dm_tag_data(f: typing.BinaryIO, outdata: typing.Optional[typing.Any] =
     # for structs we read len,num, len0,type0,len1,... =num*2+2
     # structs (15) can be 7,9,11,19
     # arrays (TAG_TYPE_ARRAY) can be 3 or 11
-    if outdata is not None:  # this means we're WRITING to the file
-            # can we get away with a limited set that we write?
-        # ie can all numbers be doubles or ints, and we have lists
-        if verbose:
-            print(f"write_dm_tag_data start {f.tell()}")
-        _, data_type = get_structdmtypes_for_python_typeorobject(outdata)
-        if not data_type:
-            raise Exception("Unsupported type: {}".format(type(outdata)))
-        _delim = "%%%%"
-        fm = "> 4s %c %c" % (size_type, size_type)
-        put_into_file(f, fm, str_to_iso8859_bytes(_delim), 0, data_type)
-        pos = f.tell()
-        header = dm_types[data_type](f, outdata)
-        if version == 4:
-            f.seek(pos-16)  # where our header_len starts
-        else:
-            f.seek(pos-8)
-        put_into_file(f, "> %c" % size_type, header+1)
-        f.seek(0, 2)
-        if verbose:
-            print(f"write_dm_tag_data end {f.tell()}")
+    if verbose:
+        print(f"read_dm_tag_data start {f.tell()}")
+    _delim2, header_len, data_type = get_from_file(f, "> 4s {size} {size}".format(size=size_type))
+    assert(_delim2 == str_to_iso8859_bytes("%%%%"))
+    ret, header = dm_types[data_type](f, None)
+    assert(header + 1 == header_len)
+    if verbose:
+        print(f"read_dm_tag_data end {f.tell()}")
+    return ret
+
+
+def write_dm_tag_data(f: typing.BinaryIO, value: typing.Any) -> None:
+    if verbose:
+        print(f"write_dm_tag_data start {f.tell()}")
+    _, data_type = get_structdmtypes_for_python_typeorobject(value)
+    if not data_type:
+        raise Exception(f"Unsupported type: {type(value)}")
+    _delim = "%%%%"
+    fm = "> 4s %c %c" % (size_type, size_type)
+    put_into_file(f, fm, str_to_iso8859_bytes(_delim), 0, data_type)
+    pos = f.tell()
+    header = dm_types[data_type](f, value)
+    if version == 4:
+        f.seek(pos-16)  # where our header_len starts
     else:
-        if verbose:
-            print(f"read_dm_tag_data start {f.tell()}")
-        _delim2, header_len, data_type = get_from_file(f, "> 4s {size} {size}".format(size=size_type))
-        assert(_delim2 == str_to_iso8859_bytes("%%%%"))
-        ret, header = dm_types[data_type](f, None)
-        assert(header + 1 == header_len)
-        if verbose:
-            print(f"read_dm_tag_data end {f.tell()}")
-        return ret
+        f.seek(pos-8)
+    put_into_file(f, "> %c" % size_type, header+1)
+    f.seek(0, 2)
+    if verbose:
+        print(f"write_dm_tag_data end {f.tell()}")
 
 
 # we store the id as a key and the name,
@@ -359,40 +359,29 @@ def get_dmtype_for_name(name: str) -> int:
     return 0
 
 
-def get_structdmtypes_for_python_typeorobject(typeorobj: typing.Any) -> typing.Tuple[typing.Optional[str], int]:
+def get_structdmtypes_for_python_typeorobject(value: typing.Any) -> tuple[str | None, int]:
     """
     Return structchar, dmtype for the python (or numpy)
     type or object typeorobj.
     For more complex types we only return the dm type
     """
-    # not isinstance is probably a bit more lenient than 'is'
-    # ie isinstance(x,str) is nicer than type(x) is str.
-    # hence we use isinstance when available
-    comparer: typing.Callable[[typing.Any], bool]
-    if isinstance(typeorobj, type):
-        comparer = lambda test: test is typeorobj
-    else:
-        comparer = lambda test: isinstance(typeorobj, test)
-
-    if comparer(int) and not -2**31 < typeorobj < 2**31 - 1:
+    if isinstance(value, int) and not -2**31 < value < 2**31 - 1:
         return 'q', 11
 
     for key, name, sc, types in dm_simple_names:
         for t in types:
-            if comparer(t):
+            if isinstance(value, t):
                 return sc, key
-    if comparer(str):
+    if isinstance(value, str):
         return None, get_dmtype_for_name('array')  # treat all strings as arrays!
-    elif comparer(str):
-        return None, get_dmtype_for_name('array')  # treat all strings as arrays!
-    elif comparer(array.array):
+    elif isinstance(value, (array.array, DataProvider)):
         return None, get_dmtype_for_name('array')
-    elif comparer(tuple):
+    elif isinstance(value, tuple):
         return None, get_dmtype_for_name('struct')
-    elif comparer(structarray):
+    elif isinstance(value, structarray):
         return None, get_dmtype_for_name('array')
     else:
-        logging.warning(f"No appropriate DMType found for {typeorobj}, {type(typeorobj)}. Trying with float32")
+        logging.warning(f"No appropriate DMType found for {value}, {type(value)}. Trying with float32")
         return None, 6
 
 
@@ -560,7 +549,29 @@ def dm_read_struct(f: typing.BinaryIO, outdata: typing.Optional[typing.Any] = No
             ret = [(ret[0], ret[1]), (ret[2], ret[3])]
         return tuple(ret), header
 
+
 dm_types[get_dmtype_for_name('struct')] = dm_read_struct
+
+
+class DataProvider:
+    def __init__(self, data: array.array[typing.Any]) -> None:
+        self.data = data
+
+    def write(self, f: typing.BinaryIO) -> None:
+        """Write the data to the file."""
+        data = self.data
+        data_typecode = data.typecode
+        dtype = get_dmtype_for_structchar(data_typecode)
+        if dtype < 0:
+            print()
+        assert dtype >= 0, f"typecode {data_typecode}"
+        put_into_file(f, "> %c" % size_type, dtype)
+        put_into_file(f, "> %c" % size_type, int(len(data.tobytes()) / struct.calcsize(data_typecode)))
+        if verbose:
+            print(f"dm_write_array2 end {dtype} {len(data)} {data_typecode} {f.tell()}")
+        data.tofile(f)
+        if verbose:
+            print(f"dm_write_array3 end {f.tell()}")
 
 
 # array is TAG_TYPE_ARRAY
@@ -579,9 +590,11 @@ def dm_read_array(f: typing.BinaryIO, outdata: typing.Optional[typing.Any] = Non
             if verbose:
                 print(f"dm_write_array1 end {f.tell()}")
             return struct_header + array_header
-        elif isinstance(outdata, (str, array.array)):
-            if isinstance(outdata, str):
-                outdata = array.array('H', outdata.encode("utf_16_le"))
+        elif isinstance(outdata, DataProvider):
+            outdata.write(f)
+            return array_header
+        elif isinstance(outdata, str):
+            outdata = array.array('H', outdata.encode("utf_16_le"))
             assert(isinstance(outdata, array.array))
             dtype = get_dmtype_for_structchar(outdata.typecode)
             if dtype < 0:
@@ -627,7 +640,7 @@ def dm_read_array(f: typing.BinaryIO, outdata: typing.Optional[typing.Any] = Non
             # mfm 2013-08-02 struct.calcsize('l') is 4 on win and 8 on Mac!
             # however >l, <l is 4 on both... could be a bug?
             # Can we get around this by adding '>' to out structchar?
-            # nope, array only takes a sinlge char. Trying i, I instead
+            # nope, array only takes a single char. Trying i, I instead
             struct_char = get_structchar_for_dmtype(dtype)
             ret = array.array(struct_char)
             # NB this was '> L', but changing to > {size}. May break things!
