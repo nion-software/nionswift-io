@@ -130,7 +130,8 @@ def ndarray_to_imagedatadict(nparr: numpy.typing.NDArray[typing.Any]) -> dict[st
             rgba_image[:,:,3] = 255
             rgb_view = rgba_image.view(numpy.int32).reshape(rgba_image.shape[:-1])  # squash the color into uint32
         ret["Dimensions"] = list(rgb_view.shape[::-1])
-        ret["Data"] = array.array(platform_independent_char(rgb_view.dtype), rgb_view.flatten())
+        data_array = array.array[typing.Any](platform_independent_char(rgb_view.dtype), rgb_view.flatten())
+        ret["Data"] = parse_dm3.DataProvider(data_array)
     else:
         ret["DataType"] = dm_type
         ret["PixelDepth"] = nparr.dtype.itemsize
@@ -140,7 +141,8 @@ def ndarray_to_imagedatadict(nparr: numpy.typing.NDArray[typing.Any]) -> dict[st
             ret["Data"] = parse_dm3.structarray(types)
             ret["Data"].raw_data = bytes(numpy.asarray(nparr).data)
         else:
-            ret["Data"] = array.array(platform_independent_char(nparr.dtype), numpy.asarray(nparr).flatten())
+            data_array = array.array[typing.Any](platform_independent_char(nparr.dtype), numpy.asarray(nparr).flatten())
+            ret["Data"] = parse_dm3.DataProvider(data_array)
     return ret
 
 
