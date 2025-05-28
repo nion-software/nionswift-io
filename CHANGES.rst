@@ -1,6 +1,10 @@
 Changelog (nionswift-io)
 ========================
 
+15.4.2 (2025-05-28)
+-------------------
+- Build maintenance release. Add source distribution.
+
 15.4.1 (2025-02-13)
 -------------------
 - Fix regression bug when exporting DigitalMicrograph files.

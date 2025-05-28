@@ -1,9 +1,9 @@
 package:
   name: 'nionswift-io'
-  version: '15.4.1'
+  version: '15.4.2'
 
 source:
-  git_rev: 15.4.1
+  git_rev: 15.4.2
   git_url: https://github.com/nion-software/nionswift-io.git
 
 build:
