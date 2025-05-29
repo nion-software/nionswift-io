@@ -78,7 +78,7 @@ def imagedatadict_to_ndarray(imdict: dict[str, typing.Any]) -> numpy.typing.NDAr
     im = None
     if isinstance(arr, array.array):
         im = numpy.asarray(arr, dtype=arr.typecode)
-    elif isinstance(arr, parse_dm3.structarray):
+    elif isinstance(arr, parse_dm3.StructArray):
         t = typing.cast(tuple[str, str], tuple(arr.typecodes))
         im = numpy.frombuffer(
             typing.cast(typing.Any, arr.raw_data),  # huh?
@@ -138,7 +138,7 @@ def ndarray_to_imagedatadict(nparr: numpy.typing.NDArray[typing.Any]) -> dict[st
         ret["Dimensions"] = list(nparr.shape[::-1])
         if nparr.dtype.type in np_to_structarray_map:
             types = np_to_structarray_map[nparr.dtype.type]
-            ret["Data"] = parse_dm3.structarray(types)
+            ret["Data"] = parse_dm3.StructArray(types)
             ret["Data"].raw_data = bytes(numpy.asarray(nparr).data)
         else:
             data_array = array.array[typing.Any](platform_independent_char(nparr.dtype), numpy.asarray(nparr).flatten())
@@ -184,7 +184,7 @@ def load_image(file: typing.BinaryIO) -> DataAndMetadata.DataAndMetadata:
     Returns a numpy ndarray of our best guess for the most important image
     in the file.
     """
-    dmtag = parse_dm3.parse_dm_header(file)
+    dmtag = parse_dm3.dm_read_header(file)
     dmtag = fix_strings(dmtag)
     # display_keys(dmtag)
     img_index = -1
@@ -364,7 +364,7 @@ def save_image(xdata: DataAndMetadata.DataAndMetadata, file: typing.BinaryIO, fi
         dm_metadata["TimezoneOffset"] = timezone_offset
     ret["ImageList"][0]["ImageTags"] = dm_metadata
     ret["InImageMode"] = True
-    parse_dm3.parse_dm_header(file, file_version, ret)
+    parse_dm3.dm_write_header(file, file_version, ret)
 
 
 # logging.debug(image_tags['ImageData']['Calibrations'])
