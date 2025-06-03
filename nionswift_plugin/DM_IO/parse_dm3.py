@@ -400,7 +400,7 @@ def get_structdmtypes_for_python_typeorobject(value: typing.Any) -> tuple[str | 
                 return sc, key
     if isinstance(value, str):
         return None, get_dmtype_for_name('array')  # treat all strings as arrays!
-    elif isinstance(value, (array.array, DataProvider)):
+    elif isinstance(value, (array.array, DataChunkWriter)):
         return None, get_dmtype_for_name('array')
     elif isinstance(value, tuple):
         return None, get_dmtype_for_name('struct')
@@ -613,21 +613,54 @@ dm_read_types[get_dmtype_for_name('struct')] = dm_read_struct
 dm_write_types[get_dmtype_for_name('struct')] = dm_write_struct
 
 
-class DataProvider:
-    def __init__(self, data: array.array[typing.Any]) -> None:
+class DataChunkWriter:
+    """Writes data in chunks to a file.
+
+    Tries to avoid writing large chunks of data at once so that memory usage is minimized.
+
+    The 64MB chunk size is a heuristic.
+    """
+
+    def __init__(self, data: numpy.typing.NDArray[typing.Any]) -> None:
         self.data = data
 
     def write(self, f: typing.BinaryIO) -> int:
         """Write the data to the file."""
+        # data_array = array.array[typing.Any](platform_independent_char(rgb_view.dtype), rgb_view.flatten())
+        # data_array = array.array[typing.Any](platform_independent_char(nparr.dtype), numpy.asarray(nparr).flatten())
         data = self.data
-        data_typecode = data.typecode
+        data_itemsize = data.dtype.itemsize
+        data_len_bytes = numpy.prod(data.shape, dtype=numpy.uint64) * data_itemsize
+        data_dtype_char = data.dtype.char
+        match data_dtype_char, data_itemsize:
+            case 'l', 4:
+                data_typecode = 'i'
+            case 'l', 8:
+                data_typecode = 'q'
+            case 'L', 4:
+                data_typecode = 'I'
+            case 'L', 8:
+                data_typecode = 'Q'
+            case _:
+                data_typecode = str(data_dtype_char)
         dtype = get_dmtype_for_structchar(data_typecode)
         assert dtype >= 0, f"typecode {data_typecode}"
         put_into_file(f, "> %c" % size_type, dtype)
-        put_into_file(f, "> %c" % size_type, int(len(data.tobytes()) / struct.calcsize(data_typecode)))
+        put_into_file(f, "> %c" % size_type, int(data_len_bytes / struct.calcsize(data_typecode)))
         if verbose:
             print(f"dm_write_array2 end {dtype} {len(data)} {data_typecode} {f.tell()}")
-        data.tofile(f)
+        # search for the chunk size by iterating backwards through the shape and finding the
+        # largest chunk size that is less than 64MB.
+        index_count = 0
+        chunk_size = 1
+        for n in reversed(data.shape):
+            if chunk_size * n > 64 * 1024 * 1024:
+                break
+            index_count += 1
+            chunk_size *= n
+        # iterate over the remaining dimensions so that we can write the data in chunks.
+        for index in numpy.ndindex(*data.shape[:len(data.shape) - index_count]):
+            f.write(data[index].tobytes())
         if verbose:
             print(f"dm_write_array3 end {f.tell()}")
         return 2  # type, length
@@ -692,7 +725,7 @@ def dm_write_array(f: typing.BinaryIO, outdata: typing.Any) -> int:
         print(f"dm_write_array start {f.tell()}")
     if isinstance(outdata, StructArray):
         return outdata.write(f)
-    elif isinstance(outdata, DataProvider):
+    elif isinstance(outdata, DataChunkWriter):
         return outdata.write(f)
     elif isinstance(outdata, str):
         outdata = array.array('H', outdata.encode("utf_16_le"))
