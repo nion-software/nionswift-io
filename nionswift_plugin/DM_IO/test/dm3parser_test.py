@@ -30,8 +30,8 @@ def is_equal(r: typing.Any, data: typing.Any) -> bool:
         return len(r) == len(data) and all(is_equal(x, y) for x, y in zip(r, data))
     elif isinstance(r, dict):
         return r.keys() == data.keys() and all(is_equal(r[k], data[k]) for k in r)
-    elif isinstance(r, array.array) and isinstance(data, parse_dm3.DataProvider):
-        return bool(r == data.data)
+    elif isinstance(r, array.array) and isinstance(data, parse_dm3.DataChunkWriter):
+        return numpy.array_equal(numpy.array(r), data.data)
     else:
         return bool(r == data)
 
@@ -70,7 +70,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
         self.assertEqual(data, dm3_image_utils.fix_strings(ret))
 
     def test_array_simple(self) -> None:
-        dat = parse_dm3.DataProvider(array.array('b', [0]*256))
+        dat = parse_dm3.DataChunkWriter(numpy.array([0] * 256, dtype=numpy.int8))
         self.check_write_then_read_matches(dat, parse_dm3.dm_write_types[parse_dm3.get_dmtype_for_name('array')], parse_dm3.dm_read_types[parse_dm3.get_dmtype_for_name('array')])
 
     def test_array_struct(self) -> None:
@@ -79,7 +79,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
         self.check_write_then_read_matches(dat, parse_dm3.dm_write_types[parse_dm3.get_dmtype_for_name('array')], parse_dm3.dm_read_types[parse_dm3.get_dmtype_for_name('array')])
 
     def test_tagdata(self) -> None:
-        for d in [45, 2**30, 34.56, parse_dm3.DataProvider(array.array('b', [0]*256))]:
+        for d in [45, 2**30, 34.56, parse_dm3.DataChunkWriter(numpy.array([0] * 256, dtype=numpy.int8))]:
             self.check_write_then_read_matches(d, parse_dm3.dm_write_tag_data, parse_dm3.dm_read_tag_data)
 
     def test_tagroot_dict(self) -> None:
@@ -90,7 +90,7 @@ class TestDM3ImportExportClass(unittest.TestCase):
 
     def test_tagroot_dict_complex(self) -> None:
         mydata = {"Bob": 45, "Henry": 67, "Joe": {
-                  "hi": [34, 56, 78, 23], "Nope": 56.7, "d": parse_dm3.DataProvider(array.array('I', [0] * 32))}}
+                  "hi": [34, 56, 78, 23], "Nope": 56.7, "d": parse_dm3.DataChunkWriter(numpy.array([0] * 32, dtype=numpy.uint16))}}
         self.check_write_then_read_matches(mydata, parse_dm3.dm_write_tag_root, parse_dm3.dm_read_tag_root)
 
     def test_tagroot_list(self) -> None:
@@ -108,9 +108,8 @@ class TestDM3ImportExportClass(unittest.TestCase):
         self.check_write_then_read_matches(mydata, parse_dm3.dm_write_types[parse_dm3.get_dmtype_for_name('struct')], parse_dm3.dm_read_types[parse_dm3.get_dmtype_for_name('struct')])
 
     def test_image(self) -> None:
-        im = array.array('h')
-        im.frombytes(numpy.random.bytes(64))
-        im_tag = {"Data": parse_dm3.DataProvider(im),
+        im = numpy.random.randint(low=0, high=65536, size=(32,), dtype=numpy.uint16)
+        im_tag = {"Data": parse_dm3.DataChunkWriter(im),
                   "Dimensions": [23, 45]}
         s = io.BytesIO()
         parse_dm3.dm_write_tag_root(s, im_tag)
