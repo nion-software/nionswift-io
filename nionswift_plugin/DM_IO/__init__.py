@@ -23,7 +23,7 @@ class DM3IODelegate(object):
         self.__api = api
         self.io_handler_id = "dm-io-handler"
         self.io_handler_name = _("DigitalMicrograph Files")
-        self.io_handler_extensions = ["dm3", "dm4"]
+        self.io_handler_extensions = ["dm4", "dm3"]
 
     def read_data_and_metadata(self, extension: str, file_path: str) -> DataAndMetadata.DataAndMetadata:
         with open(file_path, "rb", buffering=8 * 1024 * 1024) as f:
