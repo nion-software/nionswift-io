@@ -1,6 +1,10 @@
 Changelog (nionswift-io)
 ========================
 
+15.5.0 (2025-06-20)
+-------------------
+- Improve DM file format export performance, memory use.
+
 15.4.2 (2025-05-28)
 -------------------
 - Build maintenance release. Add source distribution.
