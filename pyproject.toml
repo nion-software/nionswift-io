@@ -32,7 +32,7 @@ dependencies = [
 include = [
     "nionswift_plugin",
     "nionswift_plugin.DM_IO",
-    "nionswift_plugin.test",
+    "nionswift_plugin.DM_IO.test",
     "nionswift_plugin.TIFF_IO",
     "nionswift_plugin.TIFF_IO.test"
 ]
