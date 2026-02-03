@@ -25,7 +25,7 @@ import pytz
 from nion.data import Calibration
 from nion.data import DataAndMetadata
 
-from . import parse_dm3
+from nion.io.DM_IO import parse_dm3
 
 
 def str_to_utf16_bytes(s: str) -> bytes:

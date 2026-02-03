@@ -17,8 +17,8 @@ import h5py
 import numpy
 import numpy.typing
 
-from nionswift_plugin.DM_IO import parse_dm3
-from nionswift_plugin.DM_IO import dm3_image_utils
+from nion.io.DM_IO import parse_dm3
+from nion.io.DM_IO import dm3_image_utils
 
 from nion.data import Calibration
 from nion.data import DataAndMetadata
