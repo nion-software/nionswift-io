@@ -32,17 +32,16 @@ dependencies = [
 include = [
     "nionswift_plugin",
     "nionswift_plugin.DM_IO",
-    "nion.io.DM_IO",
-    "nion.io.DM_IO.test",
+    "nionswift_plugin.test",
     "nionswift_plugin.TIFF_IO",
     "nionswift_plugin.TIFF_IO.test"
 ]
 
 [tool.setuptools.package-data]
-"nion.io.DM_IO.test" = ["resources/*"]
+"nionswift_plugin.DM_IO.test" = ["resources/*"]
 
 [tool.pytest.ini_options]
 testpaths = [
-    "nion/io/DM_IO",
+    "nionswift_plugin/DM_IO",
     "nionswift_plugin/TIFF_IO"
 ]
