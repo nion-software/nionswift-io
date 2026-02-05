@@ -1,5 +1,9 @@
 """
-    Support for DM3 and DM4 I/O.
+    Plugin support for DM3, DM4 and DM5 I/O.
+    The delegate classes implement the interface Facade.DataAndMetadataIOHandlerInterface. The IO handling is implemented
+    outside the plugin, in nionswift-io/nion/io/DM_IO.
+    The DM3IODelegate handles dm3 and dm4 files defaulting to dm4 unless manually typed with dm3.
+    The DM5IODelegate handles dm5 files,
 """
 
 # standard libraries
@@ -12,9 +16,29 @@ from nion.data import DataAndMetadata
 
 # local libraries
 from nion.io.DM_IO import dm3_image_utils
-
+from nion.io.DM_IO import DM5IOHandler
 
 _ = gettext.gettext
+
+
+class DM5IODelegate:
+    def __init__(self, api: typing.Any) -> None:
+        self.__api = api
+        self.io_handler_id = "dm5-io-handler"
+        self.io_handler_name = _("DigitalMicrograph 5")
+        self.io_handler_extensions = ["dm5"]
+
+    def read_data_and_metadata(self, extension: str, file_path: str) -> DataAndMetadata.DataAndMetadata:
+        with open(file_path, "rb", buffering=64 * 1024 * 1024) as f:
+            return DM5IOHandler.load_image(f)
+
+    def can_write_data_and_metadata(self, data_and_metadata: DataAndMetadata.DataAndMetadata, extension: str) -> bool:
+        return extension.lower() in self.io_handler_extensions
+
+    def write_data_and_metadata(self, data_and_metadata: DataAndMetadata.DataAndMetadata, file_path_str: str, extension: str) -> None:
+        file_path = pathlib.Path(file_path_str)
+        with open(file_path, 'wb', buffering=64 * 1024 * 1024) as f:
+            DM5IOHandler.save_image(data_and_metadata, f)
 
 
 class DM3IODelegate(object):
@@ -59,11 +83,6 @@ class DM3IODelegate(object):
             dm3_image_utils.save_image(xdata, f, 4 if file_path.suffix == ".dm4" else 3)
 
 
-def load_image(file_path: str) -> DataAndMetadata.DataAndMetadata:
-    with open(file_path, "rb", buffering=8 * 1024 * 1024) as f:
-        return dm3_image_utils.load_image(f)
-
-
 class DM3IOExtension(object):
 
     # required for Swift to recognize this as an extension class.
@@ -74,11 +93,14 @@ class DM3IOExtension(object):
         api = api_broker.get_api(version="1", ui_version="1")
         # be sure to keep a reference or it will be closed immediately.
         self.__io_handler_ref = api.create_data_and_metadata_io_handler(DM3IODelegate(api))
+        self.__dm5_io_handler_ref = api.create_data_and_metadata_io_handler(DM5IODelegate(api))
 
     def close(self) -> None:
         # close will be called when the extension is unloaded. in turn, close any references so they get closed. this
         # is not strictly necessary since the references will be deleted naturally when this object is deleted.
         self.__io_handler_ref.close()
         self.__io_handler_ref = None
+        self.__dm5_io_handler_ref.close()
+        self.__dm5_io_handler_ref = None
 
 # TODO: How should IO delegate handle title when reading using read_data_and_metadata

@@ -17,6 +17,7 @@ import h5py
 import numpy
 
 from nion.io.DM_IO import parse_dm3
+from nion.io.DM_IO import DM5IOHandler
 from nion.io.DM_IO import dm3_image_utils
 
 from nion.data import Calibration
@@ -143,8 +144,45 @@ class DM34Handler:
         return dm3_image_utils.save_image(data_and_metadata, file, file_version)
 
 
+class DM5Handler:
+    def __init__(self) -> None:
+        self.version: int = 5
+
+    def load_image(self, b_file: typing.BinaryIO) -> DataAndMetadata.DataAndMetadata:
+        return DM5IOHandler.load_image(b_file)
+
+    def save_image(self, data_and_metadata: DataAndMetadata.DataAndMetadata, file: typing.BinaryIO, _: int) -> None:
+        return DM5IOHandler.save_image(data_and_metadata, file)
+
+
 class TestDMHandlers(unittest.TestCase):
-    dm_handlers: typing.Sequence[DMHandlerProtocol] = [DM34Handler(3), DM34Handler(4)]
+    dm_handlers:typing.Sequence[DMHandlerProtocol] = [DM34Handler(3), DM34Handler(4), DM5Handler()]
+
+    def calibrations_equal(self, actual_dimension: Calibration.Calibration,
+                           desired_dimension: Calibration.Calibration) -> None:
+        """Check using assert almost equal to pass false negatives from floating point errors"""
+        self.assertAlmostEqual(actual_dimension.offset, desired_dimension.offset, 6)
+        self.assertAlmostEqual(actual_dimension.scale, desired_dimension.scale, 6)
+        self.assertEqual(actual_dimension.units, desired_dimension.units)
+
+    def dimension_calibrations_equal(self, actual: typing.Sequence[Calibration.Calibration],
+                                     desired: typing.Sequence[Calibration.Calibration]) -> None:
+        for actual_dimension, desired_dimension in zip(actual, desired):
+            self.calibrations_equal(actual_dimension, desired_dimension)
+
+    def metadata_equal(self, metadata_r: typing.Mapping[str, typing.Any],
+                       metadata_l: typing.Mapping[str, typing.Any]) -> None:
+        """Drops the nested dict that is used in dm5.
+
+        The dm5 handler saves a
+        """
+        metadata_r = dict(metadata_r)
+        metadata_l = dict(metadata_l)
+        if metadata_r.get("__dm_metadata__"):
+            metadata_r.pop("__dm_metadata__")
+        if metadata_l.get("__dm_metadata__"):
+            metadata_l.pop("__dm_metadata__")
+        self.assertEqual(metadata_r, metadata_l)
 
     def test_data_write_read_round_trip(self) -> None:
         def db_make_directory_if_needed(directory_path: str) -> None:
@@ -210,8 +248,8 @@ class TestDMHandlers(unittest.TestCase):
                                 xdata = handler.load_image(s)
                                 self.assertTrue(numpy.array_equal(data_in, xdata.data))
                                 self.assertEqual(data_descriptor_in, xdata.data_descriptor)
-                                self.assertEqual(tuple(dimensional_calibrations_in), tuple(xdata.dimensional_calibrations))
-                                self.assertEqual(intensity_calibration_in, xdata.intensity_calibration)
+                                self.dimension_calibrations_equal(dimensional_calibrations_in, xdata.dimensional_calibrations)
+                                self.calibrations_equal(intensity_calibration_in, xdata.intensity_calibration)
 
     def test_rgb_data_write_read_round_trip(self) -> None:
         for handler in self.dm_handlers:
@@ -240,8 +278,8 @@ class TestDMHandlers(unittest.TestCase):
             handler.save_image(xdata_in, s, handler.version)
             s.seek(0)
             xdata = handler.load_image(s)
-            self.assertEqual(tuple(dimensional_calibrations_in), tuple(xdata.dimensional_calibrations))
-            self.assertEqual(intensity_calibration_in, xdata.intensity_calibration)
+            self.dimension_calibrations_equal(dimensional_calibrations_in, xdata.dimensional_calibrations)
+            self.calibrations_equal(intensity_calibration_in, xdata.intensity_calibration)
 
     def test_data_timestamp_write_read_round_trip(self) -> None:
         for handler in self.dm_handlers:
@@ -286,7 +324,7 @@ class TestDMHandlers(unittest.TestCase):
             handler.save_image(xdata_in, s, handler.version)
             s.seek(0)
             xdata = handler.load_image(s)
-            self.assertEqual(metadata_in, xdata.metadata)
+            self.metadata_equal(metadata_in, xdata.metadata)
 
     def test_metadata_difficult_types_write_read_round_trip(self) -> None:
         for handler in self.dm_handlers:
@@ -301,7 +339,7 @@ class TestDMHandlers(unittest.TestCase):
             s.seek(0)
             xdata = handler.load_image(s)
             metadata_expected = {"one": [], "two": {}, "three": [1, 2]}
-            self.assertEqual(metadata_expected, xdata.metadata)
+            self.metadata_equal(metadata_expected, xdata.metadata)
 
     def test_metadata_export_large_integer(self) -> None:
         for handler in self.dm_handlers:
@@ -316,7 +354,7 @@ class TestDMHandlers(unittest.TestCase):
             s.seek(0)
             xdata = handler.load_image(s)
             metadata_expected = {"abc": 999999999999}
-            self.assertEqual(metadata_expected, xdata.metadata)
+            self.metadata_equal(metadata_expected, xdata.metadata)
 
     def test_signal_type_round_trip(self) -> None:
         for handler in self.dm_handlers:
@@ -331,7 +369,7 @@ class TestDMHandlers(unittest.TestCase):
             s.seek(0)
             xdata = handler.load_image(s)
             metadata_expected = {'hardware_source': {'signal_type': 'EELS'}, 'Meta Data': {'Format': 'Spectrum', 'Signal': 'EELS'}}
-            self.assertEqual(metadata_expected, xdata.metadata)
+            self.metadata_equal(metadata_expected, xdata.metadata)
 
     def test_reference_images_load_properly(self) -> None:
         shape_data_descriptors = (
@@ -357,7 +395,8 @@ class TestDMHandlers(unittest.TestCase):
             # file_path = pathlib.Path(__file__).parent / "resources" / name
             # with file_path.open('wb') as f:
             #     handler.save_image(xdata, f, handler.version)
-
+            if handler.version == 5:
+                continue  # Until dm5 test files are uploaded to the git this test is ignored
             try:
                 _data = pkgutil.get_data(__name__, f"resources/{name}")
                 assert _data is not None
