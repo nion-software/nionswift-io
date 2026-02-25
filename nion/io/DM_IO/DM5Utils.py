@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 import datetime
 import json
+import enum
 import types
 import typing
 
@@ -21,8 +22,79 @@ SEQUENCE_TYPES = tuple['SEQUENCE_TYPES', ...] | list['SEQUENCE_TYPES'] | numpy.g
 FieldInfo: typing.TypeAlias = typing.Union[tuple[numpy.dtype[typing.Any], int], tuple[numpy.dtype[typing.Any], int, typing.Any]]
 DTypeLike = typing.Union[numpy.dtype[typing.Any], type[numpy.generic], str]
 
-# swift to dm conversions
+class DMTypeIDs(enum.IntEnum):
+    SIGNED_INT16_DATA = 1
+    REAL4_DATA = 2
+    COMPLEX8_DATA = 3
+    PACKED_DATA = 5
+    UNSIGNED_INT8_DATA = 6
+    SIGNED_INT32_DATA = 7
+    RGB_DATA = 8
+    SIGNED_INT8_DATA = 9
+    UNSIGNED_INT16_DATA = 10
+    UNSIGNED_INT32_DATA = 11
+    REAL8_DATA = 12
+    COMPLEX12_DATA = 13
+    BINARY_DATA = 14
+    RGB_UINT8_0_DATA = 15  # RGB
+    RGB_UINT8_1_DATA = 16  # BGR
+    RGB_UINT16 = 17
+    RGB_FLOAT32_DATA = 18
+    RGB_FLOAT64_DATA = 19
+    RGBA_UINT8_0_DATA = 20  # ARGB
+    RGBA_UINT8_1_DATA = 21  # BRG
+    RGBA_UINT8_2_DATA = 22  # ?
+    RGBA_UINT8_3_DATA = 23  # ABGR
+    RGBA_UINT16_DATA = 24
+    RGBA_FLOAT32_DATA = 25
+    RGBA_FLOAT64_DATA = 26
+    COMPLEX8_PACKED_DATA = 27
+    COMPLEX16_PACKED_DATA = 28
 
+DM_DataType_ID_Mapping = {
+    numpy.int16: DMTypeIDs.SIGNED_INT16_DATA,
+    numpy.float32: DMTypeIDs.REAL4_DATA,
+    #numpy.complex64: DMTypeIDs.COMPLEX8_DATA,
+    #numpy.: DMTypeIDs.PACKED_DATA,
+    numpy.uint8: DMTypeIDs.UNSIGNED_INT8_DATA,
+    numpy.int32: DMTypeIDs.SIGNED_INT32_DATA,
+    #numpy.: DMTypeIDs.RGB_DATA,
+    numpy.int8: DMTypeIDs.SIGNED_INT8_DATA,
+    numpy.uint16: DMTypeIDs.UNSIGNED_INT16_DATA,
+    numpy.uint32: DMTypeIDs.UNSIGNED_INT32_DATA,
+    numpy.float64: DMTypeIDs.REAL8_DATA,
+    #numpy.: DMTypeIDs.COMPLEX12_DATA,
+    numpy.bytes_: DMTypeIDs.BINARY_DATA,
+    #numpy.: DMTypeIDs.COMPLEX8_PACKED_DATA,
+    #numpy.: DMTypeIDs.COMPLEX16_PACKED_DATA,
+}
+DM_RGB_DataType_ID_Mapping = {
+    (numpy.uint8, 0): DMTypeIDs.RGB_UINT8_0_DATA,
+    (numpy.uint8, 1): DMTypeIDs.RGB_UINT8_1_DATA,
+    (numpy.uint16, 0): DMTypeIDs.RGB_UINT16,
+    (numpy.float32, 0): DMTypeIDs.RGB_FLOAT32_DATA,
+    (numpy.float64, 0): DMTypeIDs.RGB_FLOAT64_DATA,
+}
+
+DM_RGBA_DataType_ID_Mapping = {
+    (numpy.uint8, 0): DMTypeIDs.RGBA_UINT8_0_DATA,
+    (numpy.uint8, 1): DMTypeIDs.RGBA_UINT8_1_DATA,
+    (numpy.uint8, 2): DMTypeIDs.RGBA_UINT8_2_DATA,
+    (numpy.uint8, 3): DMTypeIDs.RGBA_UINT8_3_DATA,
+    (numpy.uint16, 0): DMTypeIDs.RGBA_UINT16_DATA,
+    (numpy.float32, 0): DMTypeIDs.RGBA_FLOAT32_DATA,
+    (numpy.float64, 0): DMTypeIDs.RGBA_FLOAT64_DATA,
+}
+# swift to dm conversions
+def split_bits(value: int, bits: int) -> list[int]:
+    """Splits an integer into parts with 'bits' size"""
+    mask: int = (1 << bits) - 1
+    parts: list[int] = []
+    while value:
+        parts.append(value & mask)
+        value >>= bits
+    parts.reverse()
+    return parts
 
 def swift_to_dm_metadata(data_and_metadata: DataAndMetadata.DataAndMetadata) -> typing.Tuple[dict[str, DM_DICT_TYPES], dict[str, DM_DICT_TYPES]]:
     metadata = dict(data_and_metadata.metadata)  # in order to preserve as much of a dm5 file structure as possible the importer stores a dict representation in the metadata
@@ -39,9 +111,10 @@ class DMFormatDataAndMetadata:
     dimensional_calibrations: typing.Sequence[Calibration.Calibration]
     collection_dimension_count: int
     datum_dimension_count: int
-    needs_slice: bool
-    is_single_dimension: bool
+    is_two_dimensional_spectrum: bool
+    is_summed_image: bool
     is_sequence: bool
+    dm_datatype_id: int
 
 
 def swift_to_dm_format(data_and_metadata: DataAndMetadata.DataAndMetadata) -> DMFormatDataAndMetadata:
@@ -50,7 +123,6 @@ def swift_to_dm_format(data_and_metadata: DataAndMetadata.DataAndMetadata) -> DM
     dimensional_calibrations: typing.Sequence[Calibration.Calibration] = data_and_metadata.dimensional_calibrations
     collection_dimension_count: int = data_and_metadata.collection_dimension_count
     datum_dimension_count: int = data_and_metadata.datum_dimension_count
-    needs_slice: bool = False
     if data_and_metadata.data.dtype != numpy.uint8 and data_and_metadata.datum_dimension_count == 1:
         if len(data_and_metadata.data.shape) == 3:
             data = numpy.moveaxis(data_and_metadata.data, 2, 0)
@@ -58,18 +130,31 @@ def swift_to_dm_format(data_and_metadata: DataAndMetadata.DataAndMetadata) -> DM
         if len(data_and_metadata.data.shape) == 2:
             data = numpy.moveaxis(data_and_metadata.data, 1, 0)
             data = numpy.expand_dims(data, axis=1)
-            dimensional_calibrations = (data_and_metadata.dimensional_calibrations[1], Calibration.Calibration(),
-                                        data_and_metadata.dimensional_calibrations[0])
+            dimensional_calibrations = (data_and_metadata.dimensional_calibrations[1], Calibration.Calibration(), data_and_metadata.dimensional_calibrations[0])
             collection_dimension_count, datum_dimension_count = (2, 1)
-            needs_slice = True
 
-    needs_slice = needs_slice or (collection_dimension_count == 2 and datum_dimension_count == 1)
-    is_single_dimension = (collection_dimension_count + (1 if data_and_metadata.data_descriptor.is_sequence else 0)) == 1
+    is_two_dimensional_spectrum = (collection_dimension_count == 2 and datum_dimension_count == 1)
+    is_summed_image = is_two_dimensional_spectrum or (collection_dimension_count + (1 if data_and_metadata.data_descriptor.is_sequence else 0)) == 1
     metadata, dm_metadata = swift_to_dm_metadata(data_and_metadata)
     data_descriptor = data_and_metadata.data_descriptor
     is_sequence = data_descriptor.is_sequence
 
-    return DMFormatDataAndMetadata(data, metadata, dm_metadata, data_descriptor, dimensional_calibrations, collection_dimension_count, datum_dimension_count, needs_slice, is_single_dimension, is_sequence)
+    pixel_dimension = 1
+    if len(data.shape) - collection_dimension_count - datum_dimension_count - (1 if is_sequence else 0) == 1:
+        pixel_dimension = data.shape[-1]  # assume the size of the pixel dimension is last
+
+    dtype_id = None
+    if pixel_dimension == 3:
+        dtype_id = DM_RGBA_DataType_ID_Mapping.get((data.dtype.type, 0))
+    elif pixel_dimension == 4:
+        dtype_id = DM_RGBA_DataType_ID_Mapping.get((data.dtype.type, 0))
+
+    if not dtype_id:
+        dtype_id = DM_DataType_ID_Mapping.get(data.dtype.type)
+    if not dtype_id:
+        print(f"Unknown dm datatype id for {data.dtype}")
+        dtype_id = DMTypeIDs.UNSIGNED_INT8_DATA
+    return DMFormatDataAndMetadata(data, metadata, dm_metadata, data_descriptor, dimensional_calibrations, collection_dimension_count, datum_dimension_count, is_two_dimensional_spectrum, is_summed_image, is_sequence, dtype_id)
 
 
 def get_datetime_as_str(modified: datetime.datetime | None, timezone: str | None, timezone_offset: str | None) -> tuple[str | None, str | None]:
@@ -219,23 +304,25 @@ def save_attr_to_group(name: str, swift_value: SEQUENCE_TYPES | DM_FILE_TYPES, g
                        dtype: DTypeLike | list[tuple[str, ...]] | None = None) -> None:
     """Save data to a group's attribute, converting python types to numpy types."""
     dm_value: DM_FILE_TYPES | None = None
-
+    existing_attr = group.attrs.get(name)
     if isinstance(swift_value, DM_FILE_TYPES):
         dm_value = swift_value
     elif isinstance(swift_value, str):
         dm_value = numpy.bytes_(swift_value.encode())
     elif isinstance(swift_value, bool):
-        dm_value = numpy.bool_(swift_value)
-    elif isinstance(swift_value, float):
+        if dtype == numpy.bool_:
+            dm_value = numpy.bool_(swift_value)
+        else:
+            dm_value = numpy.uint8(1 if swift_value else 0)
+    elif isinstance(swift_value, (float, int)):
         if dtype is None:
-            dm_value = numpy.float64(swift_value)
-        elif numpy.issubdtype(dtype, numpy.floating):
-            dm_value = numpy.asarray(swift_value, dtype=dtype)[()]
-    elif isinstance(swift_value, int):
-        if dtype is None:
-            dm_value = numpy.int64(swift_value)
-        elif numpy.issubdtype(dtype, numpy.integer):
-            dm_value = numpy.asarray(swift_value, dtype=dtype)[()]
+            if existing_attr and numpy.can_cast(numpy.min_scalar_type(swift_value), existing_attr.dtype):  # Default to the current dtype
+                dtype = existing_attr.dtype
+            elif isinstance(swift_value, float):  # Otherwise as a signed 64 bit value
+                dtype = numpy.float64
+            else:
+                dtype = numpy.int64
+        dm_value = numpy.asarray(swift_value, dtype=dtype)[()]
     elif isinstance(swift_value, (tuple, list)):
         if dtype is not None:
             np_dtype = numpy.dtype(dtype)
@@ -255,7 +342,7 @@ def save_attr_to_group(name: str, swift_value: SEQUENCE_TYPES | DM_FILE_TYPES, g
 
     if dm_value is not None:
         try:
-            if group.attrs.get(name) is not None:
+            if existing_attr is not None:
                 group.attrs[name] = dm_value
             else:
                 group.attrs.create(name, dm_value)
@@ -265,7 +352,6 @@ def save_attr_to_group(name: str, swift_value: SEQUENCE_TYPES | DM_FILE_TYPES, g
         raise TypeError(f"{swift_value!r}, {type(swift_value)!r} is not supported.")
 
 # Serialization Functions
-
 
 def _serialize_dm_attrs_into_swift_metadata(data: DM_FILE_TYPES | int | float) \
         -> typing.Dict[str, DM_DICT_TYPES | dict[str, typing.Any]] | int | float:
@@ -370,13 +456,13 @@ def _deserialize_dm_attrs_from_swift_metadata(serialized: typing.Mapping[str, DM
     assert np_dtype is not None
     if isinstance(np_dtype, numpy.dtypes.VoidDType):
         assert isinstance(data, dict)
-        value = data.get('__data__')
-        if isinstance(value, tuple):
-            void_data = value
-        elif isinstance(value, list):
-            void_data = tuple(value)
+        void_value = data.get('__data__')
+        if isinstance(void_value, tuple):
+            void_data = void_value
+        elif isinstance(void_value, list):
+            void_data = tuple(void_value)
         else:
-            void_data = (value, )
+            void_data = (void_value, )
             if np_dtype.fields is None or not hasattr(np_dtype.fields, "keys") or len(void_data) != len(np_dtype.fields.keys()):
                 raise ValueError(f"Unable to deserialize {data}: Mismatched number of fields.")
         void_fields = data.get('__fields__')
