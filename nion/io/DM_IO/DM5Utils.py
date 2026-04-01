@@ -22,7 +22,9 @@ SEQUENCE_TYPES = tuple['SEQUENCE_TYPES', ...] | list['SEQUENCE_TYPES'] | numpy.g
 FieldInfo: typing.TypeAlias = typing.Union[tuple[numpy.dtype[typing.Any], int], tuple[numpy.dtype[typing.Any], int, typing.Any]]
 DTypeLike = typing.Union[numpy.dtype[typing.Any], type[numpy.generic], str]
 
+
 class DMTypeIDs(enum.IntEnum):
+    """Enum for type IDs specified in the Data Type List in https://www.gatan.com/dm5-documentation"""
     SIGNED_INT16_DATA = 1
     REAL4_DATA = 2
     COMPLEX8_DATA = 3
@@ -51,59 +53,46 @@ class DMTypeIDs(enum.IntEnum):
     COMPLEX8_PACKED_DATA = 27
     COMPLEX16_PACKED_DATA = 28
 
-DM_DataType_ID_Mapping = {
+
+# Map numpy types to the DM Type IDs
+_DM_DataType_ID_Mapping = {
     numpy.int16: DMTypeIDs.SIGNED_INT16_DATA,
     numpy.float32: DMTypeIDs.REAL4_DATA,
-    #numpy.complex64: DMTypeIDs.COMPLEX8_DATA,
-    #numpy.: DMTypeIDs.PACKED_DATA,
+    numpy.complex64: DMTypeIDs.COMPLEX8_DATA,
     numpy.uint8: DMTypeIDs.UNSIGNED_INT8_DATA,
     numpy.int32: DMTypeIDs.SIGNED_INT32_DATA,
-    #numpy.: DMTypeIDs.RGB_DATA,
     numpy.int8: DMTypeIDs.SIGNED_INT8_DATA,
     numpy.uint16: DMTypeIDs.UNSIGNED_INT16_DATA,
     numpy.uint32: DMTypeIDs.UNSIGNED_INT32_DATA,
     numpy.float64: DMTypeIDs.REAL8_DATA,
-    #numpy.: DMTypeIDs.COMPLEX12_DATA,
+    numpy.complex128: DMTypeIDs.COMPLEX12_DATA,
     numpy.bytes_: DMTypeIDs.BINARY_DATA,
-    #numpy.: DMTypeIDs.COMPLEX8_PACKED_DATA,
-    #numpy.: DMTypeIDs.COMPLEX16_PACKED_DATA,
-}
-DM_RGB_DataType_ID_Mapping = {
-    (numpy.uint8, 0): DMTypeIDs.RGB_UINT8_0_DATA,
-    (numpy.uint8, 1): DMTypeIDs.RGB_UINT8_1_DATA,
-    (numpy.uint16, 0): DMTypeIDs.RGB_UINT16,
-    (numpy.float32, 0): DMTypeIDs.RGB_FLOAT32_DATA,
-    (numpy.float64, 0): DMTypeIDs.RGB_FLOAT64_DATA,
 }
 
-DM_RGBA_DataType_ID_Mapping = {
-    (numpy.uint8, 0): DMTypeIDs.RGBA_UINT8_0_DATA,
-    (numpy.uint8, 1): DMTypeIDs.RGBA_UINT8_1_DATA,
-    (numpy.uint8, 2): DMTypeIDs.RGBA_UINT8_2_DATA,
-    (numpy.uint8, 3): DMTypeIDs.RGBA_UINT8_3_DATA,
-    (numpy.uint16, 0): DMTypeIDs.RGBA_UINT16_DATA,
-    (numpy.float32, 0): DMTypeIDs.RGBA_FLOAT32_DATA,
-    (numpy.float64, 0): DMTypeIDs.RGBA_FLOAT64_DATA,
+# Map the RGB channel numpy type to the DM Data Type
+# RGB_UINT8_1_DATA is accessed by adding the order to RGB_UINT8_0_DATA.
+_DM_RGB_DataType_ID_Mapping = {
+    numpy.uint8: DMTypeIDs.RGB_UINT8_0_DATA,
+    numpy.uint16: DMTypeIDs.RGB_UINT16,
+    numpy.float32: DMTypeIDs.RGB_FLOAT32_DATA,
+    numpy.float64: DMTypeIDs.RGB_FLOAT64_DATA,
 }
-# swift to dm conversions
-def split_bits(value: int, bits: int) -> list[int]:
-    """Splits an integer into parts with 'bits' size"""
-    mask: int = (1 << bits) - 1
-    parts: list[int] = []
-    while value:
-        parts.append(value & mask)
-        value >>= bits
-    parts.reverse()
-    return parts
 
-def swift_to_dm_metadata(data_and_metadata: DataAndMetadata.DataAndMetadata) -> typing.Tuple[dict[str, DM_DICT_TYPES], dict[str, DM_DICT_TYPES]]:
-    metadata = dict(data_and_metadata.metadata)  # in order to preserve as much of a dm5 file structure as possible the importer stores a dict representation in the metadata
-    dm_metadata = metadata.pop('__dm_metadata__', dict())  # the dict representation is removed, with the rest of the metadata being used for ImageTags
-    return metadata, dm_metadata
+# Map the RGBA channel numpy type to the DM Data Type
+# RGBA_UINT8_1_DATA, RGBA_UINT8_2_DATA, RGBA_UINT8_3_DATA are accessed by adding the order to RGBA_UINT8_0_DATA.
+_DM_RGBA_DataType_ID_Mapping = {
+    numpy.uint8: DMTypeIDs.RGBA_UINT8_0_DATA,
+    numpy.uint16: DMTypeIDs.RGBA_UINT16_DATA,
+    numpy.float32: DMTypeIDs.RGBA_FLOAT32_DATA,
+    numpy.float64: DMTypeIDs.RGBA_FLOAT64_DATA,
+}
+
+# DM conversion
 
 
 @dataclasses.dataclass
 class DMFormatDataAndMetadata:
+    """Configuration for storing DataAndMetadata in DM's data format."""
     data: numpy.ndarray[tuple[typing.Any, ...], numpy.dtype[typing.Any]]
     metadata: dict[str, DM_DICT_TYPES]
     dm_metadata: dict[str, DM_DICT_TYPES]
@@ -115,46 +104,87 @@ class DMFormatDataAndMetadata:
     is_summed_image: bool
     is_sequence: bool
     dm_datatype_id: int
+    move_axis: tuple[int, int] | None
+    data_shape: tuple[int, ...]
 
 
-def swift_to_dm_format(data_and_metadata: DataAndMetadata.DataAndMetadata) -> DMFormatDataAndMetadata:
-    """Changes the swift data and metadata into the same representation of dimensions as how digital micrograph stores it"""
+def get_dm_datatype_id(channels_per_pixel: int, data: numpy.ndarray[tuple[typing.Any, ...], numpy.dtype[typing.Any]], pixel_channel_order: int = 0) -> int:
+    """Get the DM Type ID from the numpy data type, the number of channels per pixel, and the pixel channel order."""
+    dtype_id = None
+    if data.dtype.type != numpy.uint8:
+        if channels_per_pixel == 3:
+            if pixel_channel_order != 0 and pixel_channel_order != 1:
+                print(f"WARNING: Invalid Pixel Channel Order {pixel_channel_order}.")
+                pixel_channel_order = 0
+        elif not 0 <= pixel_channel_order <= 3:
+            print(f"WARNING: Invalid Pixel Channel Order {pixel_channel_order}.")
+            pixel_channel_order = 0
+
+    if channels_per_pixel == 3:
+        dtype_id = _DM_RGB_DataType_ID_Mapping.get(data.dtype.type)
+    elif channels_per_pixel == 4:
+        dtype_id = _DM_RGBA_DataType_ID_Mapping.get(data.dtype.type)
+
+    if dtype_id is not None:
+        dtype_id = DMTypeIDs(dtype_id.value + pixel_channel_order)  # The DM Type ID for other orders are accessed by adding the order number to the initial type.
+    else:
+        dtype_id = _DM_DataType_ID_Mapping.get(data.dtype.type)
+
+    if dtype_id is None:
+        print(f"WARNING: Unknown dm datatype id for {data.dtype}")
+        dtype_id = DMTypeIDs.UNSIGNED_INT8_DATA
+    return dtype_id
+
+
+def get_stored_dm_metadata(data_and_metadata: DataAndMetadata.DataAndMetadata) -> typing.Tuple[dict[str, DM_DICT_TYPES], dict[str, DM_DICT_TYPES]]:
+    metadata = dict(data_and_metadata.metadata)  # In order to preserve as much of a dm5 file structure as possible the importer stores a dict representation in the metadata
+    dm_metadata = metadata.pop('__dm_metadata__', dict())  # The dict representation is removed, with the rest of the metadata being used for ImageTags
+    return metadata, dm_metadata
+
+
+def move_list_axis(shape: list[int], move_axis: tuple[int, int]) -> None:
+    """Move a list element from source to destination specified by the move_axis tuple, modifying the list in place."""
+    if move_axis:
+        source = shape.pop(move_axis[0])
+        shape.insert(move_axis[1], source)
+
+
+def get_dm_format_data_and_metadata(data_and_metadata: DataAndMetadata.DataAndMetadata) -> DMFormatDataAndMetadata:
+    """Get the configuration to apply to the DataAndMetadata in order to convert it to the form DM files store it"""
     data: numpy.ndarray[tuple[typing.Any, ...], numpy.dtype[typing.Any]] = data_and_metadata.data
     dimensional_calibrations: typing.Sequence[Calibration.Calibration] = data_and_metadata.dimensional_calibrations
     collection_dimension_count: int = data_and_metadata.collection_dimension_count
     datum_dimension_count: int = data_and_metadata.datum_dimension_count
+    move_axis: tuple[int, int] | None = None
     if data_and_metadata.data.dtype != numpy.uint8 and data_and_metadata.datum_dimension_count == 1:
         if len(data_and_metadata.data.shape) == 3:
-            data = numpy.moveaxis(data_and_metadata.data, 2, 0)
+            # Move the last axis in front of the first two axes.
+            move_axis = (2, 0)
             dimensional_calibrations = (data_and_metadata.dimensional_calibrations[2],) + tuple(data_and_metadata.dimensional_calibrations[0:2])
         if len(data_and_metadata.data.shape) == 2:
-            data = numpy.moveaxis(data_and_metadata.data, 1, 0)
-            data = numpy.expand_dims(data, axis=1)
+            # Reverse the shape, then insert an axis shape 1 in the middle.
+            data = numpy.expand_dims(data, axis=0)  # Since moveaxis puts the last axis in front, inserting the new axis at the front before moving will result in the new axis being in the middle after the move.
+            move_axis = (2, 0)
             dimensional_calibrations = (data_and_metadata.dimensional_calibrations[1], Calibration.Calibration(), data_and_metadata.dimensional_calibrations[0])
             collection_dimension_count, datum_dimension_count = (2, 1)
 
     is_two_dimensional_spectrum = (collection_dimension_count == 2 and datum_dimension_count == 1)
     is_summed_image = is_two_dimensional_spectrum or (collection_dimension_count + (1 if data_and_metadata.data_descriptor.is_sequence else 0)) == 1
-    metadata, dm_metadata = swift_to_dm_metadata(data_and_metadata)
+    metadata, dm_metadata = get_stored_dm_metadata(data_and_metadata)
     data_descriptor = data_and_metadata.data_descriptor
     is_sequence = data_descriptor.is_sequence
 
-    pixel_dimension = 1
-    if len(data.shape) - collection_dimension_count - datum_dimension_count - (1 if is_sequence else 0) == 1:
-        pixel_dimension = data.shape[-1]  # assume the size of the pixel dimension is last
+    channels_per_pixel = 1
+    if len(data.shape) - collection_dimension_count - datum_dimension_count - (1 if is_sequence else 0) == 1:  # There is one extra dimension in the data.
+        channels_per_pixel = data.shape[-1]  # The channels per pixel is the last dimension in the data shape.
 
-    dtype_id = None
-    if pixel_dimension == 3:
-        dtype_id = DM_RGBA_DataType_ID_Mapping.get((data.dtype.type, 0))
-    elif pixel_dimension == 4:
-        dtype_id = DM_RGBA_DataType_ID_Mapping.get((data.dtype.type, 0))
+    data_shape = list(data.shape)
+    if move_axis:
+        move_list_axis(data_shape, move_axis)  # Move the axes so the shape to match what will be written by the chunked writer
 
-    if not dtype_id:
-        dtype_id = DM_DataType_ID_Mapping.get(data.dtype.type)
-    if not dtype_id:
-        print(f"Unknown dm datatype id for {data.dtype}")
-        dtype_id = DMTypeIDs.UNSIGNED_INT8_DATA
-    return DMFormatDataAndMetadata(data, metadata, dm_metadata, data_descriptor, dimensional_calibrations, collection_dimension_count, datum_dimension_count, is_two_dimensional_spectrum, is_summed_image, is_sequence, dtype_id)
+    dtype_id = get_dm_datatype_id(channels_per_pixel, data)
+    return DMFormatDataAndMetadata(data, metadata, dm_metadata, data_descriptor, dimensional_calibrations, collection_dimension_count,
+                                   datum_dimension_count, is_two_dimensional_spectrum, is_summed_image, is_sequence, dtype_id, move_axis, tuple(data_shape))
 
 
 def get_datetime_as_str(modified: datetime.datetime | None, timezone: str | None, timezone_offset: str | None) -> tuple[str | None, str | None]:
@@ -262,10 +292,12 @@ def _convert_void_to_sequence(void: numpy.void, np_dtype: numpy.dtype, meta: dic
 
     return sequence if container == "list" else tuple(sequence)
 
+
 # h5py utility functions
 
 
 def decode_bytes_to_str(data: bytes) -> str:
+    """Attempt to decode bytes as UTF-8, with a fallback to latin1 (ISO-8859-1) as dm5 files could contain either."""
     try:
         return data.decode()
     except UnicodeDecodeError:
@@ -278,6 +310,43 @@ def get_or_create_group(base_group: h5py.Group, name: str) -> h5py.Group:
     if group is None:
         return base_group.create_group(name)
     return group
+
+
+def create_dataset_chunked_writer(data_group: h5py.Group, dataset_name: str, data: numpy.typing.NDArray[typing.Any],
+                                  data_shape: tuple[int, ...], move_axis: tuple[int, int] | None = None, max_chunk_size: int = 268435456) \
+        -> h5py.Dataset:
+    """Create a named dataset in a group then write the data in chunks to avoid using too much memory.
+
+    The default max_chunk_size is 256MiB in bytes, the 'max items per chunk' is max_chunk_size / 'bytes per item'.
+    If swap_axes is provided then the data will be written with those axes swapped.
+    """
+    max_items_per_chunk = max_chunk_size / data.dtype.itemsize
+    # create the dataset, preallocate space.
+    ds = data_group.require_dataset(dataset_name, shape=data_shape, dtype=data.dtype)
+
+    # search for the chunk size by iterating backwards through the shape and finding the
+    # largest chunk size that is less than max_chunk_size.
+    index_count = 0
+    chunk_size = 1
+    for n in reversed(data_shape):
+        if chunk_size * n > max_items_per_chunk:
+            break
+        index_count += 1
+        chunk_size *= n
+    # Iterate over the remaining dimensions so that we can write the data in chunks.
+    for index in numpy.ndindex(*data_shape[:len(data_shape) - index_count]):
+        input_selection = list(tuple(index) + (slice(None),) * index_count)
+        if move_axis:
+            axis_a, axis_b = move_axis
+            input_selection[axis_a], input_selection[axis_b] = input_selection[axis_b], input_selection[axis_a]
+            selected_data = data[tuple(input_selection)]
+            selected_data = selected_data[(slice(None),) * index_count + (numpy.newaxis,) * (len(data.shape) - index_count)]
+            selected_data = numpy.moveaxis(selected_data, axis_a, axis_b)
+        else:
+            selected_data = data[tuple(input_selection)]
+        selection = tuple(index) + (slice(None),) * index_count
+        ds[selection] = selected_data
+    return ds
 
 
 def get_from_nested_dict(dictionary: dict[str, typing.Any], path: list[str], default: typing.Any = None) -> typing.Any:
@@ -300,41 +369,41 @@ def get_from_nested_dict(dictionary: dict[str, typing.Any], path: list[str], def
     return current_dict
 
 
-def save_attr_to_group(name: str, swift_value: SEQUENCE_TYPES | DM_FILE_TYPES, group: h5py.Group,
+def save_attr_to_group(name: str, value: SEQUENCE_TYPES | DM_FILE_TYPES, group: h5py.Group,
                        dtype: DTypeLike | list[tuple[str, ...]] | None = None) -> None:
     """Save data to a group's attribute, converting python types to numpy types."""
     dm_value: DM_FILE_TYPES | None = None
     existing_attr = group.attrs.get(name)
-    if isinstance(swift_value, DM_FILE_TYPES):
-        dm_value = swift_value
-    elif isinstance(swift_value, str):
-        dm_value = numpy.bytes_(swift_value.encode())
-    elif isinstance(swift_value, bool):
+    if isinstance(value, DM_FILE_TYPES):
+        dm_value = value
+    elif isinstance(value, str):
+        dm_value = numpy.bytes_(value.encode())
+    elif isinstance(value, bool):
         if dtype == numpy.bool_:
-            dm_value = numpy.bool_(swift_value)
+            dm_value = numpy.bool_(value)
         else:
-            dm_value = numpy.uint8(1 if swift_value else 0)
-    elif isinstance(swift_value, (float, int)):
+            dm_value = numpy.uint8(1 if value else 0)
+    elif isinstance(value, (float, int)):
         if dtype is None:
-            if existing_attr and numpy.can_cast(numpy.min_scalar_type(swift_value), existing_attr.dtype):  # Default to the current dtype
+            if existing_attr and numpy.can_cast(numpy.min_scalar_type(value), existing_attr.dtype):  # Default to the current dtype
                 dtype = existing_attr.dtype
-            elif isinstance(swift_value, float):  # Otherwise as a signed 64 bit value
+            elif isinstance(value, float):  # Otherwise as a signed 64 bit value
                 dtype = numpy.float64
             else:
                 dtype = numpy.int64
-        dm_value = numpy.asarray(swift_value, dtype=dtype)[()]
-    elif isinstance(swift_value, (tuple, list)):
+        dm_value = numpy.asarray(value, dtype=dtype)[()]
+    elif isinstance(value, (tuple, list)):
         if dtype is not None:
             np_dtype = numpy.dtype(dtype)
             if np_dtype.fields is None:
-                raise TypeError(f"Expected a structured dtype for sequence data {type(swift_value)}.")
-            dm_value = numpy.array(tuple(swift_value), dtype=np_dtype)[()]  # Construction of void type
+                raise TypeError(f"Expected a structured dtype for sequence data {type(value)}.")
+            dm_value = numpy.array(tuple(value), dtype=np_dtype)[()]  # Construction of void type
         else:
-            void_dtype, data = _convert_sequence_to_void(swift_value)
+            void_dtype, data = _convert_sequence_to_void(value)
             if void_dtype is not None and hasattr(void_dtype, "metadata") and isinstance(void_dtype.metadata, types.MappingProxyType):
                 # dtype metadata is not saved by h5py so instead the metadata is saved as an attribute named '__meta__'
                 meta = dict(void_dtype.metadata) or {"container": "scalar", "children": []}
-                save_attr_to_group(name=name + ".__meta__", swift_value=json.dumps(meta), group=group)
+                save_attr_to_group(name=name + ".__meta__", value=json.dumps(meta), group=group)
                 if data:
                     dm_value = numpy.array(data, dtype=void_dtype)[()]
                 else:  # If the data is an empty tuple h5py throws an error unless it is done without the dtype
@@ -349,21 +418,22 @@ def save_attr_to_group(name: str, swift_value: SEQUENCE_TYPES | DM_FILE_TYPES, g
         except OSError as e:
             print(f"Failed to save {name}, {e}")
     else:
-        raise TypeError(f"{swift_value!r}, {type(swift_value)!r} is not supported.")
+        raise TypeError(f"{value!r}, {type(value)!r} is not supported.")
 
 # Serialization Functions
 
-def _serialize_dm_attrs_into_swift_metadata(data: DM_FILE_TYPES | int | float) \
+
+def _serialize_dm_attrs_into_metadata_dict(data: DM_FILE_TYPES | int | float) \
         -> typing.Dict[str, DM_DICT_TYPES | dict[str, typing.Any]] | int | float:
     """Converts data in dm5 attrs, DM_FILE_TYPES, into a dict with the data at dict['__data__'] in a type that can be stored
-    in swift metadata.
+    in the metadata dictionary.
 
     Information to rebuild the original type is stored in the dict with the converted data.
     Data can be int or float when there is a recursive call in the ndarray or void, otherwise it is a DM_FILE_TYPE.
     This will raise a TypeError if the type of data was not in DM_FILE_TYPES as an unhandled case.
     """
 
-    def _serialize_void_dtype_into_swift_metadata(fields: typing.Optional[typing.Mapping[str, FieldInfo]]) \
+    def _serialize_void_dtype_into_metadata_dict(fields: typing.Optional[typing.Mapping[str, FieldInfo]]) \
             -> VOID_FIELD_DICT_TYPES:
 
         void_dict: VOID_FIELD_DICT_TYPES = {}
@@ -381,15 +451,15 @@ def _serialize_dm_attrs_into_swift_metadata(data: DM_FILE_TYPES | int | float) \
     serialized: typing.Dict[str, DM_DICT_TYPES | dict[str, typing.Any]]
     if isinstance(data, numpy.ndarray):
         serialized = {
-            '__data__': [_serialize_dm_attrs_into_swift_metadata(x) for x in data.tolist()],
+            '__data__': [_serialize_dm_attrs_into_metadata_dict(x) for x in data.tolist()],
             '__dtype__': data.dtype.str,
             '__shape__': data.shape,
         }
     elif isinstance(data, numpy.void) and data.dtype.fields is not None:
         serialized = {
             '__data__': {
-                '__data__': [_serialize_dm_attrs_into_swift_metadata(x) for x in data.tolist()],
-                '__fields__': _serialize_void_dtype_into_swift_metadata(data.dtype.fields),
+                '__data__': [_serialize_dm_attrs_into_metadata_dict(x) for x in data.tolist()],
+                '__fields__': _serialize_void_dtype_into_metadata_dict(data.dtype.fields),
             },
             '__dtype__': data.dtype.str,
             '__shape__': data.shape,
@@ -411,12 +481,12 @@ def _serialize_dm_attrs_into_swift_metadata(data: DM_FILE_TYPES | int | float) \
     return serialized
 
 
-def _deserialize_dm_attrs_from_swift_metadata(serialized: typing.Mapping[str, DM_DICT_TYPES]) \
+def _deserialize_dm_attrs_from_metadata_dict(serialized: typing.Mapping[str, DM_DICT_TYPES]) \
         -> DM_FILE_TYPES:
-    """Convert the swift metadata back to dm5 attrs data that was serialized using serialize_dm_attrs_into_swift_metadata.
+    """Convert the metadata dictionary back to dm5 attrs data that was serialized using serialize_dm_attrs_into_metadata_dict.
 
     Uses the stored information in the dict about the original type, and then converts the data to be that type again.
-    This will raise an exception if the dictionary passed was not one of the possible serialized versions from serialize_dm_attrs_into_swift_metadata.
+    This will raise an exception if the dictionary passed was not one of the possible serialized versions from serialize_dm_attrs_into_metadata_dict.
     """
 
     def deserialize_dtype(serialized_void: VOID_FIELD_DICT_TYPES) -> numpy.dtype | None:
@@ -486,9 +556,9 @@ def _deserialize_dm_attrs_from_swift_metadata(serialized: typing.Mapping[str, DM
 
 
 def squash_metadata_dict(metadata_dict: dict[str, typing.Any]) -> dict[str, typing.Any]:
-    """Removes the stored types made by serialize_dm_attrs_into_swift_metadata leaving only the data in the swift metadata dict.
+    """Removes the stored serialized types made by serialize_dm_attrs_into_metadata_dict leaving only the data in the metadata dict.
 
-    This is done so the swift metadata structure for everything but dm_metadata is identical to what would be seen in dm3/4.
+    This is done so the metadata dictionary structure for everything but dm_metadata is identical to what would be seen in dm3/4.
     """
 
     def _convert_attrs(attrs_dict: typing.Dict[str, typing.Any], base_dict: dict[str, typing.Any]) -> None:
@@ -519,7 +589,7 @@ def squash_metadata_dict(metadata_dict: dict[str, typing.Any]) -> dict[str, typi
 def convert_group_to_dict(group: h5py.Group) -> dict[str, typing.Any]:
     """Converts h5py groups to a dict, with nested groups becoming nested dicts, and stores attrs as a nested dict, ignores datasets.
 
-    Recursively visit all the nodes in the group converting attrs data to a type that can be stored in swift metadata DM_DICT_TYPES.
+    Recursively visit all the nodes in the group converting attrs data to a type that can be stored in metadata dictionary DM_DICT_TYPES.
     """
     def _convert_attrs_to_dict(attrs: h5py.AttributeManager) -> dict[str, typing.Any]:
         """Converts group attributes into a dict, serializing the data from dm5 types"""
@@ -539,7 +609,7 @@ def convert_group_to_dict(group: h5py.Group) -> dict[str, typing.Any]:
                 meta = json.loads(meta_json)
                 value = _convert_void_to_sequence(value, value.dtype, meta)
             else:
-                value = _serialize_dm_attrs_into_swift_metadata(value)
+                value = _serialize_dm_attrs_into_metadata_dict(value)
 
             attrs_dict[key] = value
 
@@ -570,8 +640,8 @@ def convert_dict_to_group(base_dict: typing.Dict[str, typing.Any], group: h5py.G
     def _convert_dict_to_attrs(attrs_dict: typing.Dict[str, typing.Any], base_group: h5py.Group) -> None:
         for key, value in attrs_dict.items():
             if isinstance(value, dict):
-                value = _deserialize_dm_attrs_from_swift_metadata(value)
-            save_attr_to_group(name=key, swift_value=value, group=base_group)
+                value = _deserialize_dm_attrs_from_metadata_dict(value)
+            save_attr_to_group(name=key, value=value, group=base_group)
 
     def _recursive_dict_to_group(recursive_dict: typing.Dict[str, typing.Any], top_group: h5py.Group) -> h5py.Group:
         for key, value in recursive_dict.items():
@@ -583,7 +653,7 @@ def convert_dict_to_group(base_dict: typing.Dict[str, typing.Any], group: h5py.G
                 new_group = get_or_create_group(top_group, key)
                 _recursive_dict_to_group(recursive_dict[key], new_group)
             elif isinstance(value, (str, list, tuple, float, int)):
-                save_attr_to_group(name=key, swift_value=value, group=top_group)
+                save_attr_to_group(name=key, value=value, group=top_group)
         return top_group
 
     return _recursive_dict_to_group(base_dict, group)
