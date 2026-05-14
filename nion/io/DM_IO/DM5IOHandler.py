@@ -110,9 +110,9 @@ def _convert_data_shape(dataset: h5py.Dataset, image_data: h5py.Group,
     else:
         is_sequence = False
 
-    if move_axis is not None:
-        DM5Utils.move_list_axis(data_shape, move_axis)
     data = data.reshape(tuple(data_shape))
+    if move_axis is not None:
+        data = numpy.moveaxis(data, move_axis[0], move_axis[1])
 
     if datatype == 23:  # RGBA_UINT8_3_DATA
         assert data.dtype == numpy.uint32
