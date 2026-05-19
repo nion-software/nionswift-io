@@ -395,8 +395,6 @@ class TestDMHandlers(unittest.TestCase):
             # file_path = pathlib.Path(__file__).parent / "resources" / name
             # with file_path.open('wb') as f:
             #     handler.save_image(xdata, f, handler.version)
-            if handler.version == 5:
-                continue  # Until dm5 test files are uploaded to the git this test is ignored
             try:
                 _data = pkgutil.get_data(__name__, f"resources/{name}")
                 assert _data is not None
