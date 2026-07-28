@@ -134,7 +134,7 @@ class DMHandlerProtocol(typing.Protocol):
 
 class DM34Handler:
     def __init__(self, version: int) -> None:
-        self.version:int = version
+        self.version: int = version
 
     def load_image(self, b_file: typing.BinaryIO) -> DataAndMetadata.DataAndMetadata:
         return dm3_image_utils.load_image(b_file)
@@ -158,6 +158,40 @@ class DM5Handler:
 class TestDMHandlers(unittest.TestCase):
     dm_handlers:typing.Sequence[DMHandlerProtocol] = [DM34Handler(3), DM34Handler(4), DM5Handler()]
 
+    @staticmethod
+    def db_make_directory_if_needed(directory_path: str) -> None:
+        if os.path.exists(directory_path):
+            if not os.path.isdir(directory_path):
+                raise OSError("Path is not a directory:", directory_path)
+        else:
+            os.makedirs(directory_path)
+
+    class numpy_array_type:
+        def __init__(self, shape: tuple[int, ...], dtype: numpy.typing.DTypeLike) -> None:
+            self.data = numpy.ones(shape, dtype)
+
+        def __enter__(self) -> TestDMHandlers.numpy_array_type:
+            return self
+
+        def __exit__(self, exception_type: typing.Optional[typing.Type[BaseException]], value: typing.Optional[BaseException], traceback: typing.Optional[types.TracebackType]) -> typing.Optional[bool]:
+            return None
+
+    class h5py_array_type:
+        def __init__(self, shape: tuple[int, ...], dtype: numpy.typing.DTypeLike) -> None:
+            current_working_directory = os.getcwd()
+            self.__workspace_dir = os.path.join(current_working_directory, "__Test")
+            TestDMHandlers.db_make_directory_if_needed(self.__workspace_dir)
+            self.f = h5py.File(os.path.join(self.__workspace_dir, "file.h5"), "a")
+            self.data = self.f.create_dataset("data", data=numpy.ones(shape, dtype))
+
+        def __enter__(self) -> TestDMHandlers.h5py_array_type:
+            return self
+
+        def __exit__(self, exception_type: typing.Optional[typing.Type[BaseException]], value: typing.Optional[BaseException], traceback: typing.Optional[types.TracebackType]) -> typing.Optional[bool]:
+            self.f.close()
+            shutil.rmtree(self.__workspace_dir)
+            return None
+
     def calibrations_equal(self, actual_dimension: Calibration.Calibration,
                            desired_dimension: Calibration.Calibration) -> None:
         """Check using assert almost equal to pass false negatives from floating point errors"""
@@ -172,9 +206,9 @@ class TestDMHandlers(unittest.TestCase):
 
     def metadata_equal(self, metadata_r: typing.Mapping[str, typing.Any],
                        metadata_l: typing.Mapping[str, typing.Any]) -> None:
-        """Drops the nested dict that is used in dm5.
+        """Check whether the metadata dictionary is equivilent.
 
-        The dm5 handler saves a
+        The dm5 handler saves additional metadata so this has to be dropped.
         """
         metadata_r = dict(metadata_r)
         metadata_l = dict(metadata_l)
@@ -185,36 +219,7 @@ class TestDMHandlers(unittest.TestCase):
         self.assertEqual(metadata_r, metadata_l)
 
     def test_data_write_read_round_trip(self) -> None:
-        def db_make_directory_if_needed(directory_path: str) -> None:
-            if os.path.exists(directory_path):
-                if not os.path.isdir(directory_path):
-                    raise OSError("Path is not a directory:", directory_path)
-            else:
-                os.makedirs(directory_path)
-
-        class numpy_array_type:
-            def __init__(self, shape: tuple[int, ...], dtype: numpy.typing.DTypeLike) -> None:
-                self.data = numpy.ones(shape, dtype)
-            def __enter__(self) -> numpy_array_type:
-                return self
-            def __exit__(self, exception_type: typing.Optional[typing.Type[BaseException]], value: typing.Optional[BaseException], traceback: typing.Optional[types.TracebackType]) -> typing.Optional[bool]:
-                return None
-
-        class h5py_array_type:
-            def __init__(self, shape: tuple[int, ...], dtype: numpy.typing.DTypeLike) -> None:
-                current_working_directory = os.getcwd()
-                self.__workspace_dir = os.path.join(current_working_directory, "__Test")
-                db_make_directory_if_needed(self.__workspace_dir)
-                self.f = h5py.File(os.path.join(self.__workspace_dir, "file.h5"), "a")
-                self.data = self.f.create_dataset("data", data=numpy.ones(shape, dtype))
-            def __enter__(self) -> h5py_array_type:
-                return self
-            def __exit__(self, exception_type: typing.Optional[typing.Type[BaseException]], value: typing.Optional[BaseException], traceback: typing.Optional[types.TracebackType]) -> typing.Optional[bool]:
-                self.f.close()
-                shutil.rmtree(self.__workspace_dir)
-                return None
-
-        array_types = numpy_array_type, h5py_array_type
+        array_types = TestDMHandlers.numpy_array_type, TestDMHandlers.h5py_array_type
         dtypes = (numpy.float32, numpy.float64, numpy.complex64, numpy.complex128, numpy.int16, numpy.uint16, numpy.int32, numpy.uint32)
         shape_data_descriptors = (
             ((6,), DataAndMetadata.DataDescriptor(False, 0, 1)),        # spectrum
