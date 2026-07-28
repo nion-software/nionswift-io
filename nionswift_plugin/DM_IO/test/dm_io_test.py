@@ -19,6 +19,7 @@ import numpy
 from nion.io.DM_IO import parse_dm3
 from nion.io.DM_IO import DM5IOHandler
 from nion.io.DM_IO import dm3_image_utils
+from nion.io.DM_IO import DM5Utils
 
 from nion.data import Calibration
 from nion.data import DataAndMetadata
@@ -124,6 +125,14 @@ class DMHandlerProtocol(typing.Protocol):
     def version(self) -> int:
         ...
 
+    @property
+    def max_chunk_items(self) -> int:
+        ...
+
+    @max_chunk_items.setter
+    def max_chunk_items(self, value: int) -> None:
+        ...
+
     def load_image(self, b_file: typing.BinaryIO) -> DataAndMetadata.DataAndMetadata:
         ...
 
@@ -143,6 +152,14 @@ class DM34Handler:
                    file_version: int) -> None:
         return dm3_image_utils.save_image(data_and_metadata, file, file_version)
 
+    @property
+    def max_chunk_items(self) -> int:
+        return parse_dm3.MAX_CHUNK_ITEMS
+
+    @max_chunk_items.setter
+    def max_chunk_items(self, value: int) -> None:
+        parse_dm3.MAX_CHUNK_ITEMS = value
+
 
 class DM5Handler:
     def __init__(self) -> None:
@@ -153,6 +170,14 @@ class DM5Handler:
 
     def save_image(self, data_and_metadata: DataAndMetadata.DataAndMetadata, file: typing.BinaryIO, _: int) -> None:
         return DM5IOHandler.save_image(data_and_metadata, file)
+
+    @property
+    def max_chunk_items(self) -> int:
+        return DM5Utils.MAX_CHUNK_ITEMS
+
+    @max_chunk_items.setter
+    def max_chunk_items(self, value: int) -> None:
+        DM5Utils.MAX_CHUNK_ITEMS = value
 
 
 class TestDMHandlers(unittest.TestCase):

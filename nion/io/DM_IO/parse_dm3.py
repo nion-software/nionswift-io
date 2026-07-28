@@ -42,6 +42,7 @@ size_type = "L"
 
 TAG_TYPE_ARRAY = 20
 TAG_TYPE_DATA = 21
+MAX_CHUNK_ITEMS = 64 * 1024 * 1024  # Max number of items for a single chunk of the chunked data writer
 
 
 def get_from_file(f: typing.BinaryIO, stype: str) -> typing.Any:
@@ -654,7 +655,7 @@ class DataChunkWriter:
         index_count = 0
         chunk_size = 1
         for n in reversed(data.shape):
-            if chunk_size * n > 64 * 1024 * 1024:
+            if chunk_size * n > MAX_CHUNK_ITEMS:
                 break
             index_count += 1
             chunk_size *= n
