@@ -355,7 +355,7 @@ def save_image(data_and_metadata: DataAndMetadata.DataAndMetadata, file: typing.
         image_list = DM5Utils.get_or_create_group(base_group, "ImageList")
         source_image = DM5Utils.get_or_create_group(image_list, f"[{image_list_index}]")  # The image should be in ImageList:[1], 0 is reserved for thumbnails
         image_data = DM5Utils.get_or_create_group(source_image, "ImageData")
-        DM5Utils.create_dataset_chunked_writer(image_data, "Data", dm_format.data, dm_format.data_shape, dm_format.move_axis)
+        DM5Utils.create_dataset_chunked_writer(image_data, "Data", dm_format.data, dm_format.move_axis)
         calibrations = DM5Utils.get_or_create_group(image_data, "Calibrations")
 
         if dm_format.dimensional_calibrations and len(dm_format.dimensional_calibrations) == len(dm_format.data_shape):

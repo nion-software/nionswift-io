@@ -21,7 +21,7 @@ DM_DICT_TYPES = typing.Tuple[int, ...] | int | str | typing.List[typing.Any] | f
 SEQUENCE_TYPES = tuple['SEQUENCE_TYPES', ...] | list['SEQUENCE_TYPES'] | numpy.generic | float | int | bool | str | bytes
 FieldInfo: typing.TypeAlias = typing.Union[tuple[numpy.dtype[typing.Any], int], tuple[numpy.dtype[typing.Any], int, typing.Any]]
 DTypeLike = typing.Union[numpy.dtype[typing.Any], type[numpy.generic], str]
-
+MAX_CHUNK_ITEMS = 64 * 1024 * 1024  # Max number of items for a single chunk of the chunked data writer
 
 class DMTypeIDs(enum.IntEnum):
     """Enum for type IDs specified in the Data Type List in https://www.gatan.com/dm5-documentation"""
@@ -142,13 +142,6 @@ def get_stored_dm_metadata(data_and_metadata: DataAndMetadata.DataAndMetadata) -
     return metadata, dm_metadata
 
 
-def move_list_axis(shape: list[int], move_axis: tuple[int, int]) -> None:
-    """Move a list element from source to destination specified by the move_axis tuple, modifying the list in place."""
-    if move_axis:
-        source = shape.pop(move_axis[0])
-        shape.insert(move_axis[1], source)
-
-
 def get_dm_format_data_and_metadata(data_and_metadata: DataAndMetadata.DataAndMetadata) -> DMFormatDataAndMetadata:
     """Get the configuration to apply to the DataAndMetadata in order to convert it to the form DM files store it"""
     data: numpy.ndarray[tuple[typing.Any, ...], numpy.dtype[typing.Any]] = data_and_metadata.data
@@ -180,7 +173,8 @@ def get_dm_format_data_and_metadata(data_and_metadata: DataAndMetadata.DataAndMe
 
     data_shape = list(data.shape)
     if move_axis:
-        move_list_axis(data_shape, move_axis)  # Move the axes so the shape to match what will be written by the chunked writer
+        source = data_shape.pop(move_axis[0])
+        data_shape.insert(move_axis[1], source)  # Move the axes so the shape will match what will be written by the chunked writer
 
     dtype_id = get_dm_datatype_id(channels_per_pixel, data)
     return DMFormatDataAndMetadata(data, metadata, dm_metadata, data_descriptor, dimensional_calibrations, collection_dimension_count,
@@ -313,39 +307,34 @@ def get_or_create_group(base_group: h5py.Group, name: str) -> h5py.Group:
 
 
 def create_dataset_chunked_writer(data_group: h5py.Group, dataset_name: str, data: numpy.typing.NDArray[typing.Any],
-                                  data_shape: tuple[int, ...], move_axis: tuple[int, int] | None = None, max_chunk_size: int = 268435456) \
+                                  move_axis: tuple[int, int] | None = None) \
         -> h5py.Dataset:
     """Create a named dataset in a group then write the data in chunks to avoid using too much memory.
 
-    The default max_chunk_size is 256MiB in bytes, the 'max items per chunk' is max_chunk_size / 'bytes per item'.
-    If swap_axes is provided then the data will be written with those axes swapped.
+    If move_axes is provided then move axis will be called on the data using the first and last elements of the provided tuple.
     """
-    max_items_per_chunk = max_chunk_size / data.dtype.itemsize
-    # create the dataset, preallocate space.
-    ds = data_group.require_dataset(dataset_name, shape=data_shape, dtype=data.dtype)
 
-    # search for the chunk size by iterating backwards through the shape and finding the
-    # largest chunk size that is less than max_chunk_size.
+    if move_axis:
+        data = numpy.moveaxis(data, move_axis[0], move_axis[1])
+
+    data_shape = data.shape
+    # Create the dataset, preallocate space.
+    ds = data_group.create_dataset(dataset_name, shape=data_shape, dtype=data.dtype)
+
+    # Search for the chunk size by iterating backwards through the shape and finding the largest chunk size that is less than 64Mi items.
     index_count = 0
     chunk_size = 1
     for n in reversed(data_shape):
-        if chunk_size * n > max_items_per_chunk:
+        if chunk_size * n > MAX_CHUNK_ITEMS:
             break
         index_count += 1
         chunk_size *= n
+
     # Iterate over the remaining dimensions so that we can write the data in chunks.
     for index in numpy.ndindex(*data_shape[:len(data_shape) - index_count]):
-        input_selection = list(tuple(index) + (slice(None),) * index_count)
-        if move_axis:
-            axis_a, axis_b = move_axis
-            input_selection[axis_a], input_selection[axis_b] = input_selection[axis_b], input_selection[axis_a]
-            selected_data = data[tuple(input_selection)]
-            selected_data = selected_data[(slice(None),) * index_count + (numpy.newaxis,) * (len(data.shape) - index_count)]
-            selected_data = numpy.moveaxis(selected_data, axis_a, axis_b)
-        else:
-            selected_data = data[tuple(input_selection)]
         selection = tuple(index) + (slice(None),) * index_count
-        ds[selection] = selected_data
+        ds[selection] = data[selection]
+
     return ds
 
 
