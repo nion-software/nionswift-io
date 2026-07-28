@@ -452,6 +452,43 @@ class TestDMHandlers(unittest.TestCase):
         # with open(file_path, "wb") as f:
         #     handler.save_image(xdata, f, 3)
 
+    def test_dm_chunked_writer_preserves_data(self) -> None:
+        """Test that the chunked data writer on a round trip.
+
+        The MAX_CHUNK_ITEMS is set to low enough that chunking will happen which is compared to the input data.
+        """
+        array_types = TestDMHandlers.numpy_array_type, TestDMHandlers.h5py_array_type
+        dtypes = (numpy.float32, numpy.float64, numpy.complex64, numpy.complex128, numpy.int16, numpy.uint16, numpy.int32, numpy.uint32)
+        shape_data_descriptors = (
+            ((64,), DataAndMetadata.DataDescriptor(False, 0, 1)),  # spectrum
+            ((8, 8), DataAndMetadata.DataDescriptor(False, 1, 1)),  # 1d collection of spectra
+            ((2, 4, 8), DataAndMetadata.DataDescriptor(False, 2, 1)),  # 2d collection of spectra
+        )
+        old_max_items = parse_dm3.MAX_CHUNK_ITEMS
+
+        for handler in self.dm_handlers:
+            handler.max_chunk_items = 16  # Decrease the max size
+            for array_type in array_types:
+                for dtype, shape_data_descriptor in itertools.product(dtypes, shape_data_descriptors):
+                    shape, data_descriptor = shape_data_descriptor
+                    bytes_stream = io.BytesIO()
+                    with array_type(shape, dtype) as array_context:
+                        data_in = array_context.data
+                        dimensional_calibrations_in = list()
+                        for index, dimension in enumerate(shape):
+                            dimensional_calibrations_in.append(Calibration.Calibration(1.0 + 0.1 * index, 2.0 + 0.2 * index, "µ" + "n" * index))
+                        intensity_calibration_in = Calibration.Calibration(4, 5, "six")
+                        metadata_in = dict[typing.Any, typing.Any]()
+                        xdata_in = DataAndMetadata.new_data_and_metadata(data_in, data_descriptor=data_descriptor, dimensional_calibrations=dimensional_calibrations_in, intensity_calibration=intensity_calibration_in, metadata=metadata_in)
+                        handler.save_image(xdata_in, bytes_stream, handler.version)
+                        bytes_stream.seek(0)
+                        xdata = handler.load_image(bytes_stream)
+                        self.assertTrue(numpy.array_equal(data_in, xdata.data))
+                        self.assertEqual(data_descriptor, xdata.data_descriptor)
+                        self.dimension_calibrations_equal(dimensional_calibrations_in, xdata.dimensional_calibrations)
+                        self.calibrations_equal(intensity_calibration_in, xdata.intensity_calibration)
+            handler.max_chunk_items = old_max_items
+
 if __name__ == "__main__":
     logging.getLogger().setLevel(logging.DEBUG)
     unittest.main()
