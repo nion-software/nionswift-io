@@ -34,15 +34,19 @@ include = [
     "nionswift_plugin",
     "nionswift_plugin.DM_IO",
     "nionswift_plugin.DM_IO.test",
+    "nionswift_plugin.HMSA_IO",
+    "nionswift_plugin.HMSA_IO.test",
     "nionswift_plugin.TIFF_IO",
     "nionswift_plugin.TIFF_IO.test"
 ]
 
 [tool.setuptools.package-data]
 "nionswift_plugin.DM_IO.test" = ["resources/*"]
+"nionswift_plugin.HMSA_IO.test" = ["resources/*"]
 
 [tool.pytest.ini_options]
 testpaths = [
     "nionswift_plugin/DM_IO",
+    "nionswift_plugin/HMSA_IO",
     "nionswift_plugin/TIFF_IO"
 ]

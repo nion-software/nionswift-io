@@ -111,6 +111,12 @@ class IOExtension:
         self.__io_handler_ref = None
 ```
 
+## HMSA import
+
+MSA/MAS hyper-dimensional spectral (HMSA) import is read-only. Open the
+`.hmsa` binary file and keep its matching `.xml` descriptor in the same
+directory with the same base name.
+
 ## More Information
 
 -   [Changelog](https://github.com/nion-software/nionswift-io/blob/master/CHANGES.rst)
