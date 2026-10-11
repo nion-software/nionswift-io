@@ -2,9 +2,12 @@
 import datetime
 import io
 import logging
+import pathlib
+import tempfile
 import typing
 import unittest
 
+import h5py
 import numpy
 import numpy.typing
 
@@ -121,6 +124,21 @@ class TestTIFFIOClass(unittest.TestCase):
             self.assertEqual(xdata_w.data_shape, xdata_r.data_shape)
             self.assertEqual(xdata_w.is_sequence, xdata_r.is_sequence)
             self.assertEqual(xdata_w.collection_dimension_count, xdata_r.collection_dimension_count)
+
+    def test_imagej_writes_reads_rgb_and_rgba_stored_in_hdf5_roundtrip(self) -> None:
+        io_delegate = TIFF_IO.TIFFIODelegate_ImageJ(API())
+        with tempfile.TemporaryDirectory() as directory, h5py.File(pathlib.Path(directory) / "data.h5", "w") as f:
+            for channel_count in (3, 4):
+                d = numpy.zeros((5, 6, channel_count), dtype=numpy.uint8)
+                for channel in range(channel_count):
+                    d[..., channel] = 10 * (channel + 1)
+                dataset = f.create_dataset(f"data{channel_count}", data=d)
+                b = io.BytesIO()
+                xdata_w = DataAndMetadata.new_data_and_metadata(dataset, data_descriptor=DataAndMetadata.DataDescriptor(False, 0, 2))
+                io_delegate.write_data_and_metadata_stream(xdata_w, b)
+                b.seek(0)
+                xdata_r = io_delegate.read_data_and_metadata_from_stream(b)
+                self.assertTrue(numpy.array_equal(d, xdata_r.data))
 
     def test_baseline_produces_proper_data_types(self) -> None:
         io_delegate = TIFF_IO.TIFFIODelegate_Baseline(API())

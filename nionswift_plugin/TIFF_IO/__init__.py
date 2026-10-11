@@ -390,15 +390,16 @@ class TIFFIODelegate_ImageJ(TIFFIODelegateBase):
             # last data axis depends on whether data is rgb(a) or not
             last_data_axis = -1
 
-            # check and adapt for rgb(a) data
+            # check and adapt for rgb(a) data. convert to a numpy array first, since not every array backend supports
+            # indexing with an unsorted list.
             if data_and_metadata.is_data_rgb:
-                data = data[...,(2, 1, 0)]
+                data = numpy.asarray(data)[...,(2, 1, 0)]
                 data_shape = data_shape[:-1]
                 tifffile_shape[-1] = 3
                 last_data_axis = -2
             if data_and_metadata.is_data_rgba:
                 data_shape = data_shape[:-1]
-                data = data[...,(2, 1, 0, 3)]
+                data = numpy.asarray(data)[...,(2, 1, 0, 3)]
                 tifffile_shape[-1] = 4
                 last_data_axis = -2
 
