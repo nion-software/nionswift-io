@@ -10,6 +10,7 @@ import pkgutil
 import os
 import unittest
 import shutil
+import tempfile
 import types
 import typing
 
@@ -295,6 +296,21 @@ class TestDMHandlers(unittest.TestCase):
             xdata = handler.load_image(s)
             self.assertTrue(numpy.array_equal(data_in, xdata.data))
             self.assertEqual(data_descriptor_in, xdata.data_descriptor)
+
+    def test_rgba_data_stored_in_hdf5_write_read_round_trip(self) -> None:
+        data_in = numpy.zeros((6, 4, 4), numpy.uint8)
+        for channel in range(4):
+            data_in[..., channel] = 10 * (channel + 1)
+        with tempfile.TemporaryDirectory() as directory, h5py.File(os.path.join(directory, "data.h5"), "w") as f:
+            dataset = f.create_dataset("data", data=data_in)
+            for handler in self.dm_handlers:
+                s = io.BytesIO()
+                xdata_in = DataAndMetadata.new_data_and_metadata(dataset, data_descriptor=DataAndMetadata.DataDescriptor(False, 0, 2))
+                handler.save_image(xdata_in, s, handler.version)
+                s.seek(0)
+                xdata = handler.load_image(s)
+                # dm3 and dm4 drop the alpha channel on load, so compare the color channels.
+                self.assertTrue(numpy.array_equal(data_in[..., :3], xdata.data[..., :3]))
 
     def test_calibrations_write_read_round_trip(self) -> None:
         for handler in self.dm_handlers:

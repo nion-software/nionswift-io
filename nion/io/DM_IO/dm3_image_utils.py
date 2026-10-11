@@ -122,7 +122,8 @@ def ndarray_to_imagedatadict(nparr: numpy.typing.NDArray[typing.Any]) -> dict[st
         ret["DataType"] = 23
         ret["PixelDepth"] = 4
         if nparr.shape[2] == 4:
-            rgb_view = nparr.view(numpy.int32).reshape(nparr.shape[:-1])  # squash the color into uint32
+            # convert to a numpy array first, since not every array backend has view.
+            rgb_view = numpy.asarray(nparr).view(numpy.int32).reshape(nparr.shape[:-1])  # squash the color into int32
         else:
             assert nparr.shape[2] == 3
             rgba_image = numpy.empty(nparr.shape[:-1] + (4,), numpy.uint8)
